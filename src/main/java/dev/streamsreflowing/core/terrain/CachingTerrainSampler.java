@@ -7,7 +7,7 @@ import dev.streamsreflowing.core.ColumnKey;
 import dev.streamsreflowing.core.terrain.TerrainSampler;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
 
 public final class CachingTerrainSampler
 implements TerrainSampler {
@@ -18,8 +18,11 @@ implements TerrainSampler {
     private final ConcurrentLinkedQueue<Long> e = new ConcurrentLinkedQueue();
     private final ConcurrentHashMap<Long, Double> f = new ConcurrentHashMap();
     private final ConcurrentLinkedQueue<Long> g = new ConcurrentLinkedQueue();
-    private final AtomicLong h = new AtomicLong();
-    private final AtomicLong i = new AtomicLong();
+    // A10: pure diagnostics - read only by hits()/misses()/hitPercent(). Every sampling call bumps one
+    // of these, so 14 sampler threads were doing RMW on one shared cacheline (two adjacent fields).
+    // LongAdder is striped instead, and hitPercent() keeps reading the same two totals.
+    private final LongAdder h = new LongAdder();
+    private final LongAdder i = new LongAdder();
     private final ConcurrentHashMap<Long, Double> j = new ConcurrentHashMap();
     private final ConcurrentLinkedQueue<Long> k = new ConcurrentLinkedQueue();
     private final ConcurrentHashMap<Long, Double> l = new ConcurrentHashMap();
@@ -65,7 +68,7 @@ implements TerrainSampler {
         long l2 = CachingTerrainSampler.a(n, n2);
         Double d = this.d.get(l2);
         if (d != null) {
-            this.h.incrementAndGet();
+            this.h.increment();
             return d;
         }
         double d2 = this.a.height(n, n2);
@@ -74,10 +77,10 @@ implements TerrainSampler {
         }
         Double d3 = this.d.putIfAbsent(l2, d2);
         if (d3 != null) {
-            this.h.incrementAndGet();
+            this.h.increment();
             return d3;
         }
-        this.i.incrementAndGet();
+        this.i.increment();
         this.e.offer(l2);
         while (this.d.size() > this.b && (l = this.e.poll()) != null) {
             this.d.remove(l);
@@ -91,16 +94,16 @@ implements TerrainSampler {
         long l2 = CachingTerrainSampler.a(n, n2);
         Double d = this.f.get(l2);
         if (d != null) {
-            this.h.incrementAndGet();
+            this.h.increment();
             return d;
         }
         double d2 = this.a.surfaceHeight(n, n2);
         Double d3 = this.f.putIfAbsent(l2, d2);
         if (d3 != null) {
-            this.h.incrementAndGet();
+            this.h.increment();
             return d3;
         }
-        this.i.incrementAndGet();
+        this.i.increment();
         this.g.offer(l2);
         while (this.f.size() > this.b && (l = this.g.poll()) != null) {
             this.f.remove(l);
@@ -114,7 +117,7 @@ implements TerrainSampler {
         long l2 = CachingTerrainSampler.a(n, n2);
         Double d = this.j.get(l2);
         if (d != null) {
-            this.h.incrementAndGet();
+            this.h.increment();
             return d;
         }
         double d2 = this.a.groundHeight(n, n2);
@@ -123,10 +126,10 @@ implements TerrainSampler {
         }
         Double d3 = this.j.putIfAbsent(l2, d2);
         if (d3 != null) {
-            this.h.incrementAndGet();
+            this.h.increment();
             return d3;
         }
-        this.i.incrementAndGet();
+        this.i.increment();
         this.k.offer(l2);
         while (this.j.size() > this.b && (l = this.k.poll()) != null) {
             this.j.remove(l);
@@ -160,7 +163,7 @@ implements TerrainSampler {
         long l2 = CachingTerrainSampler.a(n, n2);
         Double d = this.l.get(l2);
         if (d != null) {
-            this.h.incrementAndGet();
+            this.h.increment();
             return d;
         }
         double d2 = this.a.groundHeightExact(n, n2);
@@ -169,10 +172,10 @@ implements TerrainSampler {
         }
         Double d3 = this.l.putIfAbsent(l2, d2);
         if (d3 != null) {
-            this.h.incrementAndGet();
+            this.h.increment();
             return d3;
         }
-        this.i.incrementAndGet();
+        this.i.increment();
         this.m.offer(l2);
         while (this.l.size() > this.b && (l = this.m.poll()) != null) {
             this.l.remove(l);
@@ -186,16 +189,16 @@ implements TerrainSampler {
     }
 
     public long hits() {
-        return this.h.get();
+        return this.h.sum();
     }
 
     public long misses() {
-        return this.i.get();
+        return this.i.sum();
     }
 
     public int hitPercent() {
-        long l = this.h.get();
-        long l2 = l + this.i.get();
+        long l = this.h.sum();
+        long l2 = l + this.i.sum();
         return l2 > 0L ? (int)(l * 100L / l2) : 0;
     }
 }

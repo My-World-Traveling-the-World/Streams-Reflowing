@@ -50,6 +50,13 @@ extends Feature<NoneFeatureConfiguration> {
     private static final int a = 32;
     private static final int b = 12;
     private static final int c = 8;
+    /*
+     * A32: opt-in trimming of the 33x33x33 scan in the tree helper below. Default OFF, because that full
+     * box is what catches floating snow and leaves around a sunken tree, and trimming it can leave the
+     * blocks at the edge of the box alone. The trimmed scan only runs with
+     * -Dstreamsreflowing.snowfast=true.
+     */
+    private static final boolean SNOW_FAST = Boolean.getBoolean("streamsreflowing.snowfast");
     private static final List<Map.Entry<TagKey<Biome>, ResourceKey<Biome>>> d = List.of(Map.entry(StreamSnowCleanupFeature.a("c", "is_swamp"), StreamSnowCleanupFeature.b("nomansland", "blackwater_river")), Map.entry(StreamSnowCleanupFeature.a("c", "is_jungle"), StreamSnowCleanupFeature.b("nomansland", "lush_river")), Map.entry(StreamSnowCleanupFeature.a("c", "is_lush"), StreamSnowCleanupFeature.b("nomansland", "lush_river")), Map.entry(StreamSnowCleanupFeature.a("c", "is_desert"), StreamSnowCleanupFeature.b("nomansland", "desert_river")));
     private static final AtomicBoolean e = new AtomicBoolean(true);
     private static final AtomicBoolean f = new AtomicBoolean(true);
@@ -144,7 +151,16 @@ extends Feature<NoneFeatureConfiguration> {
                 int n12 = columnPlan.waterSurfaceY();
                 int n13 = worldGenLevel.getHeight(Heightmap.Types.WORLD_SURFACE_WG, n10, n11) - 1;
                 int n14 = worldGenLevel.getHeight(Heightmap.Types.WORLD_SURFACE, n10, n11) - 1;
-                for (int j = n9 = Math.max(Math.max(n13, n14), n12 + 32); j >= n12 - 2; --j) {
+                // A33: start the downward scan at the column's real top instead of the "water surface +
+                // 32" floor. That floor only ever added air - everything above max(WORLD_SURFACE_WG,
+                // WORLD_SURFACE) is air by the heightmap contract - while ~32 getBlockState calls per
+                // column were spent on it. The 32-block scope is kept: min(n12 + 32, n15) caps the scan at
+                // water + 32, so nothing above that is read, and when MOTION_BLOCKING reports terrain
+                // above the cap the old start value is reproduced exactly. max(max(n13, n14), ...) keeps
+                // the old start whenever the world-surface heightmaps see anything, so no block that the
+                // old scan could reach is skipped.
+                int n15 = worldGenLevel.getHeight(Heightmap.Types.MOTION_BLOCKING, n10, n11) - 1;
+                for (int j = n9 = Math.max(Math.max(n13, n14), Math.min(n12 + 32, n15)); j >= n12 - 2; --j) {
                     BlockState blockState;
                     mutableBlockPos.set(n10, j, n11);
                     BlockState blockState2 = worldGenLevel.getBlockState(mutableBlockPos);
@@ -213,14 +229,14 @@ extends Feature<NoneFeatureConfiguration> {
                     for (BlockPos blockPos : list) {
                         worldGenLevel.setBlock(blockPos, blockPos.getY() <= n9 ? Blocks.WATER.defaultBlockState() : Blocks.AIR.defaultBlockState(), 2);
                     }
-                    StreamSnowCleanupFeature.a(worldGenLevel, n11, n14 + 4, n12, n4, n5, n6, n7);
+                    StreamSnowCleanupFeature.a(worldGenLevel, n11, n14 + 4, n12, n4, n5, n6, n7, columnPlanArray, n9);
                     bl = true;
                     continue;
                 }
                 if (n3 >= 4) continue;
                 for (n8 = n9 + 1; n8 <= n9 + 12; ++n8) {
                     if (!worldGenLevel.getBlockState(mutableBlockPos.set(n11, n8, n12)).is(BlockTags.LEAVES)) continue;
-                    if (StreamSnowCleanupFeature.a(worldGenLevel, n11, n8, n12, n4, n5, n6, n7)) {
+                    if (StreamSnowCleanupFeature.a(worldGenLevel, n11, n8, n12, n4, n5, n6, n7, columnPlanArray, n9)) {
                         bl = true;
                     }
                     ++n3;
@@ -258,7 +274,24 @@ extends Feature<NoneFeatureConfiguration> {
         return arrayList;
     }
 
-    private static boolean a(WorldGenLevel worldGenLevel, int n, int n2, int n3, int n4, int n5, int n6, int n7) {
+    /*
+     * A32: the cached plan of one column of the current chunk, or null when the column is outside it.
+     * Outside columns have no cached plan, and calling planLean for the whole 33x33 ring would cost a
+     * full river sample per column, so null means "unknown" and the caller scans that column.
+     */
+    private static ColumnPlan corridorPlan(ColumnPlan[] columnPlanArray, int n, int n2, int n3, int n4) {
+        if (columnPlanArray == null) {
+            return null;
+        }
+        int n5 = n3 - n;
+        int n6 = n4 - n2;
+        if (n5 < 0 || n5 > 15 || n6 < 0 || n6 > 15) {
+            return null;
+        }
+        return columnPlanArray[n5 * 16 + n6];
+    }
+
+    private static boolean a(WorldGenLevel worldGenLevel, int n, int n2, int n3, int n4, int n5, int n6, int n7, ColumnPlan[] columnPlanArray, int waterY) {
         int n8;
         int n9;
         int n10;
@@ -280,16 +313,41 @@ extends Feature<NoneFeatureConfiguration> {
         HashSet<Long> hashSet = new HashSet<Long>();
         ArrayDeque<long[]> arrayDeque = new ArrayDeque<long[]>();
         HashSet<Long> hashSet2 = new HashSet<Long>();
-        for (n13 = n18 - n20; n13 <= n19 + n20; ++n13) {
+        if (StreamSnowCleanupFeature.SNOW_FAST) {
+            // A32: same box, trimmed. y stays inside [water surface - 10, water surface + 12] and stops at
+            // the column's real top, and columns outside the river corridor are skipped outright. Only
+            // reachable with -Dstreamsreflowing.snowfast=true (see SNOW_FAST): a narrower box can miss
+            // floating snow / leaves at its edges, which is why the full scan stays the default.
+            int n27 = Math.min(n19 + n20, waterY + 12);
+            int n28 = Math.max(n18 - n20, waterY - 10);
             for (n12 = n21; n12 <= n22; ++n12) {
                 for (n11 = n23; n11 <= n24; ++n11) {
-                    BlockState blockState = worldGenLevel.getBlockState(mutableBlockPos.set(n12, n13, n11));
-                    if (blockState.is(BlockTags.LEAVES)) {
-                        hashSet.add(BlockPos.asLong(n12, n13, n11));
-                        continue;
+                    ColumnPlan columnPlan = StreamSnowCleanupFeature.corridorPlan(columnPlanArray, n, n3, n12, n11);
+                    if (columnPlan != null && !columnPlan.inCorridor()) continue;
+                    int n29 = Math.min(n27, worldGenLevel.getHeight(Heightmap.Types.MOTION_BLOCKING, n12, n11) - 1);
+                    for (n13 = n29; n13 >= n28; --n13) {
+                        BlockState blockState = worldGenLevel.getBlockState(mutableBlockPos.set(n12, n13, n11));
+                        if (blockState.is(BlockTags.LEAVES)) {
+                            hashSet.add(BlockPos.asLong(n12, n13, n11));
+                            continue;
+                        }
+                        if (!blockState.is(BlockTags.LOGS)) continue;
+                        arrayDeque.add(new long[]{BlockPos.asLong(n12, n13, n11), 0L});
                     }
-                    if (!blockState.is(BlockTags.LOGS)) continue;
-                    arrayDeque.add(new long[]{BlockPos.asLong(n12, n13, n11), 0L});
+                }
+            }
+        } else {
+            for (n13 = n18 - n20; n13 <= n19 + n20; ++n13) {
+                for (n12 = n21; n12 <= n22; ++n12) {
+                    for (n11 = n23; n11 <= n24; ++n11) {
+                        BlockState blockState = worldGenLevel.getBlockState(mutableBlockPos.set(n12, n13, n11));
+                        if (blockState.is(BlockTags.LEAVES)) {
+                            hashSet.add(BlockPos.asLong(n12, n13, n11));
+                            continue;
+                        }
+                        if (!blockState.is(BlockTags.LOGS)) continue;
+                        arrayDeque.add(new long[]{BlockPos.asLong(n12, n13, n11), 0L});
+                    }
                 }
             }
         }

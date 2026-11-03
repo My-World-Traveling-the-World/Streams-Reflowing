@@ -21,6 +21,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
@@ -64,6 +65,17 @@ extends Feature<NoneFeatureConfiguration> {
     private static volatile String g;
     private static volatile Object h;
     private static volatile List<BankFeature> i;
+    /*
+     * A30: biome -> already filtered PlacedFeature candidates. A biome's generation settings are
+     * immutable for the lifetime of the registry that holds it, so the list only has to be built once
+     * per biome instead of rebuilding an ArrayList and walking every PlacedFeature twice on each
+     * vegetated column. The key is the Holder the level hands out (one instance per registry entry, so a
+     * datapack reload builds new keys instead of reading a stale list), the value is an immutable copy,
+     * and the only mutable input - the biome boost blacklist text - clears the map when it changes
+     * (see a()). The size guard keeps a pathological datapack from growing it without bound.
+     */
+    private static final ConcurrentHashMap<Holder<Biome>, List<Holder<PlacedFeature>>> CANDIDATE_CACHE = new ConcurrentHashMap<Holder<Biome>, List<Holder<PlacedFeature>>>();
+    private static final int CANDIDATE_CACHE_MAX = 4096;
 
     public StreamVegetationFeature(Codec<NoneFeatureConfiguration> codec) {
         super(codec);
@@ -290,17 +302,18 @@ extends Feature<NoneFeatureConfiguration> {
             return false;
         }
         Holder<Biome> holder = worldGenLevel.getBiome(blockPos);
-        BiomeGenerationSettings biomeGenerationSettings = holder.value().getGenerationSettings();
-        List<HolderSet<PlacedFeature>> list = biomeGenerationSettings.features();
-        ArrayList<Holder<PlacedFeature>> arrayList = new ArrayList<Holder<PlacedFeature>>();
-        StreamVegetationFeature.a(list, GenerationStep.Decoration.VEGETAL_DECORATION, arrayList);
-        StreamVegetationFeature.a(list, GenerationStep.Decoration.LOCAL_MODIFICATIONS, arrayList);
-        arrayList.removeIf(StreamVegetationFeature::b);
-        arrayList.removeIf(StreamVegetationFeature::a);
-        if (arrayList.isEmpty()) {
+        List<Holder<PlacedFeature>> list = CANDIDATE_CACHE.get(holder);
+        if (list == null) {
+            list = StreamVegetationFeature.candidates(holder);
+            if (CANDIDATE_CACHE.size() >= CANDIDATE_CACHE_MAX) {
+                CANDIDATE_CACHE.clear();
+            }
+            CANDIDATE_CACHE.put(holder, list);
+        }
+        if (list.isEmpty()) {
             return false;
         }
-        ConfiguredFeature<?, ?> configuredFeature = ((PlacedFeature)((Holder)arrayList.get(randomSource.nextInt(arrayList.size()))).value()).feature().value();
+        ConfiguredFeature<?, ?> configuredFeature = ((PlacedFeature)((Holder)list.get(randomSource.nextInt(list.size()))).value()).feature().value();
         try {
             boolean bl = configuredFeature.place(worldGenLevel, chunkGenerator, randomSource, blockPos.immutable());
             if (bl) {
@@ -311,6 +324,20 @@ extends Feature<NoneFeatureConfiguration> {
         catch (RuntimeException runtimeException) {
             return false;
         }
+    }
+
+    /*
+     * A30: the filtered candidate list of one biome - the exact body that used to run per column.
+     */
+    private static List<Holder<PlacedFeature>> candidates(Holder<Biome> holder) {
+        BiomeGenerationSettings biomeGenerationSettings = holder.value().getGenerationSettings();
+        List<HolderSet<PlacedFeature>> list = biomeGenerationSettings.features();
+        ArrayList<Holder<PlacedFeature>> arrayList = new ArrayList<Holder<PlacedFeature>>();
+        StreamVegetationFeature.a(list, GenerationStep.Decoration.VEGETAL_DECORATION, arrayList);
+        StreamVegetationFeature.a(list, GenerationStep.Decoration.LOCAL_MODIFICATIONS, arrayList);
+        arrayList.removeIf(StreamVegetationFeature::b);
+        arrayList.removeIf(StreamVegetationFeature::a);
+        return List.copyOf(arrayList);
     }
 
     private static boolean a(Holder<PlacedFeature> holder) {
@@ -375,6 +402,8 @@ extends Feature<NoneFeatureConfiguration> {
             if (resourceLocation == null) continue;
             hashSet.add(resourceLocation);
         }
+        // A30: the cached candidate lists embed this blacklist, so drop them when its text changes.
+        CANDIDATE_CACHE.clear();
         f = hashSet2;
         g = string;
         e = hashSet;

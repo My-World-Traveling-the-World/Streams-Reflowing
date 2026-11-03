@@ -7,6 +7,7 @@ import dev.streamsreflowing.core.grid.LowResGrid;
 import dev.streamsreflowing.core.plate.PlateKey;
 import dev.streamsreflowing.core.river.RiverNetwork;
 import java.util.Collections;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
@@ -93,7 +94,7 @@ public final class PlateRiverCache {
         if (completableFuture.isDone()) {
             return completableFuture.join();
         }
-        boolean bl = Thread.currentThread().getName().startsWith("streamsreflowing-");
+        boolean bl = PlateRiverCache.a(Thread.currentThread().getName());
         LowResGrid.noteUrgentWaiter();
         try {
             if (bl || supplier == null) {
@@ -120,6 +121,28 @@ public final class PlateRiverCache {
         finally {
             LowResGrid.urgentWaiterDone();
         }
+    }
+
+    // D01: which threads may wait for a plate without the 300 s cap.
+    //
+    // "streamsreflowing-*" are this mod's own sampler/prefetch/urgent/framediag workers. The two prewarm
+    // pools are named "Streams-Startup-Prewarm-N" and "Streams-Runtime-Prewarm-N" (StreamsPrewarmService
+    // NamedThreadFactory) - capital S and no "reflowing" - so the old all-lowercase
+    // startsWith("streamsreflowing-") never matched them: every prewarm worker fell through to the timed
+    // path and could sit for 300 s before recomputing the plate locally.
+    //
+    // Behaviour change (intentional): prewarm workers now join() instead of timing out. That cannot
+    // deadlock here, because the wait-for graph is two levels deep and acyclic - the connected-network
+    // cache (RiverEngine.k) is built from base networks only, and a base network (RiverEngine.j) is
+    // built without waiting on any other future - so a waiting worker always waits on a builder that
+    // itself waits on nobody. Threads that are not ours (server tick, render, other mods) keep the
+    // timed fallback below unchanged, which is exactly what it exists for: a stuck plate must not
+    // freeze them.
+    private static boolean a(String string) {
+        String string2 = string.toLowerCase(Locale.ROOT);
+        return string2.startsWith("streamsreflowing-")
+                || string2.startsWith("streams-startup-prewarm-")
+                || string2.startsWith("streams-runtime-prewarm-");
     }
 
     public CompletableFuture<Void> whenReady(PlateKey plateKey2) {

@@ -125,6 +125,8 @@ public final class NetworkTracer {
     private static final double aH = 1.0;
     private static final double aI = 4.0;
     private static final long aJ = 0x4000000000000000L;
+    private static final int[] DX = new int[]{-1, 1, 0, 0};
+    private static final int[] DZ = new int[]{0, 0, -1, 1};
 
     private NetworkTracer() {
     }
@@ -173,6 +175,7 @@ public final class NetworkTracer {
         int n30 = lowResGrid.size();
         int n31 = streamsConfig.seaLevel();
         boolean[] blArray = new boolean[n30];
+        boolean[] blArrayCellScratch = new boolean[n30];
         ArrayDeque<Integer> arrayDeque = new ArrayDeque<Integer>();
         for (n29 = 0; n29 < n30; ++n29) {
             if (!lowResGrid.inDomain(n29) || lowResGrid.height(n29) == -1000.0) continue;
@@ -731,7 +734,7 @@ public final class NetworkTracer {
                             dArray2[0] = 0.0;
                             dArray2[1] = 0.0;
                             long l10 = System.nanoTime();
-                            Lake lake2 = NetworkTracer.a(list, n73, terrainSampler, lowResGrid, plateDomain, streamsConfig.borderMargin(), dArray2);
+                            Lake lake2 = NetworkTracer.a(list, n73, terrainSampler, lowResGrid, plateDomain, streamsConfig.borderMargin(), dArray2, blArrayCellScratch);
                             lArray[5] = lArray[5] + (System.nanoTime() - l10);
                             if (lake2 == null) continue;
                             for (int object11 = object10 = Math.max(n74 + 1, n73 - 2); object11 <= n73; ++object11) {
@@ -744,7 +747,7 @@ public final class NetworkTracer {
                                     dArray2[1] = 0.0;
                                 }
                                 long l12 = System.nanoTime();
-                                Lake lake3 = object11 == n73 ? lake2 : NetworkTracer.a(list2, object11, terrainSampler, lowResGrid, plateDomain, streamsConfig.borderMargin(), dArray2);
+                                Lake lake3 = object11 == n73 ? lake2 : NetworkTracer.a(list2, object11, terrainSampler, lowResGrid, plateDomain, streamsConfig.borderMargin(), dArray2, blArrayCellScratch);
                                 lArray[5] = lArray[5] + (System.nanoTime() - l12);
                                 if (lake3 == null) continue;
                                 lake = lake3;
@@ -759,7 +762,7 @@ public final class NetworkTracer {
                         ++n60;
                         l7 += (long)var105_246.size();
                         long l21 = System.nanoTime();
-                        lake = NetworkTracer.a(var105_246, object2, terrainSampler, lowResGrid, plateDomain, streamsConfig.borderMargin(), dArray2);
+                        lake = NetworkTracer.a(var105_246, object2, terrainSampler, lowResGrid, plateDomain, streamsConfig.borderMargin(), dArray2, blArrayCellScratch);
                         lArray[5] = lArray[5] + (System.nanoTime() - l21);
                     }
                 }
@@ -1384,7 +1387,7 @@ public final class NetworkTracer {
             return;
         }
         HashMap<Long, Integer> hashMap = new HashMap<Long, Integer>();
-        ArrayList<Double> arrayList = new ArrayList<Double>();
+        DoubleList arrayList = new DoubleList();
         int[] nArray2 = new int[n6];
         int[] nArray3 = new int[n6];
         for (n5 = 0; n5 < n6; ++n5) {
@@ -1413,7 +1416,7 @@ public final class NetworkTracer {
         }
         double[] dArray = new double[n5];
         for (int i = 0; i < n5; ++i) {
-            dArray[i] = Math.max((Double)arrayList.get(i), dArrayFloor[i]);
+            dArray[i] = Math.max(arrayList.get(i), dArrayFloor[i]);
         }
         ArrayDeque<Integer> arrayDeque = new ArrayDeque<Integer>();
         for (n3 = 0; n3 < n5; ++n3) {
@@ -1462,7 +1465,7 @@ public final class NetworkTracer {
             return;
         }
         HashMap<Long, Integer> hashMap = new HashMap<Long, Integer>();
-        ArrayList<Double> arrayList = new ArrayList<Double>();
+        DoubleList arrayList = new DoubleList();
         int[] nArray = new int[n3];
         int[] nArray2 = new int[n3];
         for (n2 = 0; n2 < n3; ++n2) {
@@ -1484,7 +1487,7 @@ public final class NetworkTracer {
         }
         double[] dArray = new double[n2];
         for (int i = 0; i < n2; ++i) {
-            dArray[i] = (Double)arrayList.get(i);
+            dArray[i] = arrayList.get(i);
         }
         ArrayDeque<Integer> arrayDeque = new ArrayDeque<Integer>();
         for (n = 0; n < n2; ++n) {
@@ -1518,7 +1521,7 @@ public final class NetworkTracer {
         }
     }
 
-    private static int a(double d, double d2, double d3, Map<Long, Integer> map, List<Double> list) {
+    private static int a(double d, double d2, double d3, Map<Long, Integer> map, DoubleList list) {
         long l;
         long l2 = Math.round(d * 16.0) & 0xFFFFFFFFL;
         long l3 = l2 << 32 | (l = Math.round(d2 * 16.0) & 0xFFFFFFFFL);
@@ -1540,13 +1543,14 @@ public final class NetworkTracer {
         if (n3 < 2) {
             return false;
         }
-        ConcurrentHashMap concurrentHashMap = new ConcurrentHashMap();
+        ThreadLocal<ColumnCache> columnCacheThreadLocal = ThreadLocal.withInitial(() -> new ColumnCache());
         double d2 = Math.max(streamsConfig.maxWidth() * 2.0 + 2.0, 40.0);
         double[] dArray = new double[n3];
         for (n2 = 0; n2 < n3; ++n2) {
             dArray[n2] = list.get(n2).y2();
         }
         LowResGrid.parallelFor(n3, n -> {
+            ColumnCache columnCache = columnCacheThreadLocal.get();
             RiverSegment riverSegment = (RiverSegment)list.get(n);
             double d3 = (riverSegment.x1() + riverSegment.x2()) * 0.5;
             double d4 = (riverSegment.z1() + riverSegment.z2()) * 0.5;
@@ -1578,7 +1582,7 @@ public final class NetworkTracer {
                             double d14 = Double.NEGATIVE_INFINITY;
                             for (int k = 1; k <= 3; ++k) {
                                 double d15 = (double)k / 4.0;
-                                d14 = Math.max(d14, NetworkTracer.a(terrainSampler, concurrentHashMap, d3 + (d12 - d3) * d15, d4 + (d13 - d4) * d15));
+                                d14 = Math.max(d14, NetworkTracer.a(terrainSampler, columnCache, d3 + (d12 - d3) * d15, d4 + (d13 - d4) * d15));
                             }
                             if (d14 >= riverSegment.y2() + 5.0) continue;
                             d6 = d11;
@@ -1787,6 +1791,7 @@ public final class NetworkTracer {
         if (!streamsConfig.growFromWater() || list.isEmpty()) {
             return;
         }
+        LakeCoverIndex lakeCoverIndex = new LakeCoverIndex(list3);
         for (int i = 0; i < 64; ++i) {
             RiverSegment object;
             int n2 = list.size();
@@ -1808,8 +1813,12 @@ public final class NetworkTracer {
                 RiverSegment riverSegment = list.get((Integer)entry.getValue());
                 if (riverSegment.y2() <= (double)(n + 1)) continue;
                 boolean bl = false;
-                for (int j = 0; j < list3.size(); ++j) {
-                    if (blArray[j] || !list3.get(j).covers((int)Math.floor(riverSegment.x2()), (int)Math.floor(riverSegment.z2()))) continue;
+                int n7 = (int)Math.floor(riverSegment.x2());
+                int n8 = (int)Math.floor(riverSegment.z2());
+                int n9 = lakeCoverIndex.bucket(n7, n8);
+                for (int n10 = lakeCoverIndex.from(n9); n10 < lakeCoverIndex.to(n9); ++n10) {
+                    int j = lakeCoverIndex.item(n10);
+                    if (blArray[j] || !list3.get(j).covers(n7, n8)) continue;
                     bl = true;
                     break;
                 }
@@ -1844,6 +1853,7 @@ public final class NetworkTracer {
         if (n3 == 0) {
             return;
         }
+        LakeCoverIndex lakeCoverIndex = new LakeCoverIndex(list2);
         int[] nArray2 = NetworkTracer.chainIds(list);
         double[] dArray2 = new double[n3];
         int[] nArray3 = new int[n3];
@@ -1853,7 +1863,9 @@ public final class NetworkTracer {
             nArray3[n2] = -1;
             n = (int)Math.floor((((RiverSegment)object).x1() + ((RiverSegment)object).x2()) * 0.5);
             int n4 = (int)Math.floor((((RiverSegment)object).z1() + ((RiverSegment)object).z2()) * 0.5);
-            for (int i = 0; i < list2.size(); ++i) {
+            int nBucket = lakeCoverIndex.bucket(n, n4);
+            for (int nCursor = lakeCoverIndex.from(nBucket); nCursor < lakeCoverIndex.to(nBucket); ++nCursor) {
+                int i = lakeCoverIndex.item(nCursor);
                 Lake lake;
                 if (blArray[i] || !(lake = list2.get(i)).covers(n, n4) || !Double.isNaN(dArray2[n2]) && !((double)lake.level() > dArray2[n2])) continue;
                 dArray2[n2] = lake.level();
@@ -1896,27 +1908,22 @@ public final class NetworkTracer {
 
     public static int[] chainIds(List<RiverSegment> list) {
         int n = list.size();
-        HashMap<Long, Integer> hashMap = new HashMap<Long, Integer>(n * 2);
-        HashMap<Long, Integer> hashMap2 = new HashMap<Long, Integer>(n * 2);
-        HashMap<Long, Integer> hashMap3 = new HashMap<Long, Integer>(n * 2);
-        HashMap<Long, Integer> hashMap4 = new HashMap<Long, Integer>(n * 2);
+        ChainEndpointIndex chainEndpointIndex = new ChainEndpointIndex(n);
+        ChainEndpointIndex chainEndpointIndex2 = new ChainEndpointIndex(n);
         for (int i = 0; i < n; ++i) {
             RiverSegment riverSegment = list.get(i);
-            long l = NetworkTracer.a(riverSegment.x1(), riverSegment.z1());
-            long l2 = NetworkTracer.a(riverSegment.x2(), riverSegment.z2());
-            hashMap.merge(l, 1, Integer::sum);
-            hashMap3.put(l, i);
-            hashMap2.merge(l2, 1, Integer::sum);
-            hashMap4.put(l2, i);
+            chainEndpointIndex.add(NetworkTracer.a(riverSegment.x1(), riverSegment.z1()), i);
+            chainEndpointIndex2.add(NetworkTracer.a(riverSegment.x2(), riverSegment.z2()), i);
         }
         int[] nArray = new int[n];
         for (int i = 0; i < n; ++i) {
             nArray[i] = i;
         }
-        for (Map.Entry entry : hashMap3.entrySet()) {
-            long l = (Long)entry.getKey();
-            if (hashMap.getOrDefault(l, 0) != 1 || hashMap2.getOrDefault(l, 0) != 1) continue;
-            NetworkTracer.a(nArray, (int)((Integer)hashMap4.get(l)), (int)((Integer)entry.getValue()));
+        for (int i = 0; i < chainEndpointIndex.counts.length; ++i) {
+            if (chainEndpointIndex.counts[i] != 1) continue;
+            long l = chainEndpointIndex.keys[i];
+            if (chainEndpointIndex2.count(l) != 1) continue;
+            NetworkTracer.a(nArray, chainEndpointIndex2.id(l), chainEndpointIndex.ids[i]);
         }
         int[] nArray5 = new int[n];
         for (int i = 0; i < n; ++i) {
@@ -2353,7 +2360,7 @@ public final class NetworkTracer {
         });
         double[] dArray4 = new double[n20 * n132];
         Arrays.fill(dArray4, Double.MAX_VALUE);
-        PriorityQueue<double[]> priorityQueue = new PriorityQueue<double[]>((dArray, dArray2) -> Double.compare(dArray[0], dArray2[0]));
+        DoubleMinHeap priorityQueue = new DoubleMinHeap();
         for (n10 = 0; n10 < n132; ++n10) {
             for (n9 = 0; n9 < n20; ++n9) {
                 n8 = n10 * n20 + n9;
@@ -2368,12 +2375,14 @@ public final class NetworkTracer {
                 }
                 if (n7 == 0) continue;
                 dArray4[n8] = dArray3[n8];
-                priorityQueue.add(new double[]{dArray3[n8], n8});
+                priorityQueue.add(dArray3[n8], n8);
             }
         }
         while (!priorityQueue.isEmpty()) {
-            double[] dArray5 = (double[])priorityQueue.poll();
-            if (dArray5[0] > dArray4[n9 = (int)dArray5[1]] + 1.0E-9) continue;
+            double dKey = priorityQueue.key();
+            int nHeap = priorityQueue.value();
+            priorityQueue.pop();
+            if (dKey > dArray4[n9 = nHeap] + 1.0E-9) continue;
             n8 = n9 % n20;
             n7 = n9 / n20;
             for (n6 = 0; n6 < 8; ++n6) {
@@ -2382,7 +2391,7 @@ public final class NetworkTracer {
                 n5 = n7 + b[n6];
                 if (n3 < 0 || n3 >= n20 || n5 < 0 || n5 >= n132 || !blArray[n5 * n20 + n3] || !((d = Math.max(dArray3[n2 = n5 * n20 + n3], dArray4[n9])) < dArray4[n2])) continue;
                 dArray4[n2] = d;
-                priorityQueue.add(new double[]{d, n2});
+                priorityQueue.add(d, n2);
             }
         }
         n10 = lowResGrid.gi(n) - n14;
@@ -2467,7 +2476,7 @@ public final class NetworkTracer {
         return true;
     }
 
-    private static Lake a(List<Integer> list, int n4, TerrainSampler terrainSampler, LowResGrid lowResGrid, PlateDomain plateDomain, double d, double[] dArray) {
+    private static Lake a(List<Integer> list, int n4, TerrainSampler terrainSampler, LowResGrid lowResGrid, PlateDomain plateDomain, double d, double[] dArray, boolean[] blArrayScratch) {
         int n5;
         int n6;
         int n7;
@@ -2485,7 +2494,8 @@ public final class NetworkTracer {
         int n19 = Integer.MAX_VALUE;
         int n20 = Integer.MIN_VALUE;
         int n21 = Integer.MIN_VALUE;
-        boolean[] blArray = new boolean[lowResGrid.size()];
+        boolean[] blArray = blArrayScratch != null && blArrayScratch.length >= lowResGrid.size() ? blArrayScratch : new boolean[lowResGrid.size()];
+        Arrays.fill(blArray, 0, lowResGrid.size(), false);
         for (int n144 : list) {
             blArray[n144] = true;
         }
@@ -2504,11 +2514,27 @@ public final class NetworkTracer {
         long[] lArray = new long[n13 * n12 + 63 >>> 6];
         boolean[] blArray2 = new boolean[n13 * n12];
         ArrayDeque<Integer> arrayDeque = new ArrayDeque<Integer>();
-        ArrayList<Integer> arrayList = new ArrayList<Integer>(list);
-        arrayList.sort((n, n2) -> Double.compare(lowResGrid.height((int)n), lowResGrid.height((int)n2)));
+        int[] nTop = new int[4];
+        double[] dTop = new double[4];
+        int nTopCount = 0;
+        for (int n24 : list) {
+            double dH = lowResGrid.height(n24);
+            if (nTopCount == 4 && Double.compare(dH, dTop[3]) >= 0) continue;
+            int nSlot = nTopCount < 4 ? nTopCount : 3;
+            while (nSlot > 0 && Double.compare(dH, dTop[nSlot - 1]) < 0) {
+                nTop[nSlot] = nTop[nSlot - 1];
+                dTop[nSlot] = dTop[nSlot - 1];
+                --nSlot;
+            }
+            nTop[nSlot] = n24;
+            dTop[nSlot] = dH;
+            if (nTopCount < 4) {
+                ++nTopCount;
+            }
+        }
         int n23 = -1;
-        for (int i = 0; i < Math.min(4, arrayList.size()); ++i) {
-            int n24 = (Integer)arrayList.get(i);
+        for (int i = 0; i < nTopCount; ++i) {
+            int n24 = nTop[i];
             if (!(terrainSampler.groundHeight(lowResGrid.worldX(lowResGrid.gi(n24)), lowResGrid.worldZ(lowResGrid.gj(n24))) < (double)n4)) continue;
             n23 = n24;
             break;
@@ -2733,14 +2759,15 @@ public final class NetworkTracer {
             blArray[i] = true;
             arrayDeque.add(i);
             while (!arrayDeque.isEmpty()) {
-                int[][] nArrayArray;
                 int n6 = (Integer)arrayDeque.poll();
                 ++n5;
                 int n7 = n6 % n;
                 int n8 = n6 / n;
-                for (int[] nArray : nArrayArray = new int[][]{{n7 - 1, n8}, {n7 + 1, n8}, {n7, n8 - 1}, {n7, n8 + 1}}) {
+                for (int n10 = 0; n10 < 4; ++n10) {
                     int n9;
-                    if (nArray[0] < 0 || nArray[0] >= n || nArray[1] < 0 || nArray[1] >= n2 || blArray[n9 = nArray[1] * n + nArray[0]] || (lArray[n9 >>> 6] & 1L << (n9 & 0x3F)) == 0L) continue;
+                    int n11 = n7 + DX[n10];
+                    int n12 = n8 + DZ[n10];
+                    if (n11 < 0 || n11 >= n || n12 < 0 || n12 >= n2 || blArray[n9 = n12 * n + n11] || (lArray[n9 >>> 6] & 1L << (n9 & 0x3F)) == 0L) continue;
                     blArray[n9] = true;
                     arrayDeque.add(n9);
                 }
@@ -3837,7 +3864,271 @@ public final class NetworkTracer {
     private record Pt(double x, double z, double y, double acc) {
     }
 
+    /**
+     * Growable primitive double list: stands in for the ArrayList&lt;Double&gt; that used to hold one
+     * height per graph node. get/set/add keep exactly the ArrayList semantics the callers relied on
+     * (append, in-place overwrite), only without boxing.
+     */
+    private static final class DoubleList {
+        private double[] a = new double[16];
+        private int b;
+
+        int size() {
+            return this.b;
+        }
+
+        double get(int n) {
+            return this.a[n];
+        }
+
+        void set(int n, double d) {
+            this.a[n] = d;
+        }
+
+        int add(double d) {
+            if (this.b == this.a.length) {
+                this.a = Arrays.copyOf(this.a, this.b << 1);
+            }
+            this.a[this.b] = d;
+            return this.b++;
+        }
+    }
+
+    /**
+     * Coarse bucket index over a lake list. Every lake registers in each 64-block bucket that
+     * overlaps the world rectangle its mask can possibly cover
+     * (cellMinX - spacing/2 .. cellMinX - spacing/2 + cellsWide*spacing - 1, same on Z), which is
+     * exactly the preimage of covers(x,z)==true. A point lookup therefore can never miss a lake the
+     * original full scan would have accepted, and every candidate is still verified with the
+     * original covers(x,z) predicate, so the accepted set is identical. Items inside a bucket are
+     * stored in ascending lake-index order (stable counting sort), which preserves the callers'
+     * "first hit wins" / "highest level wins, first index on ties" behaviour.
+     */
+    private static final class LakeCoverIndex {
+        private static final int B = 64;
+        private final int minBx;
+        private final int minBz;
+        private final int w;
+        private final int h;
+        private final int[] start;
+        private final int[] items;
+
+        LakeCoverIndex(List<Lake> lakes) {
+            int n = lakes.size();
+            int n2 = Integer.MAX_VALUE;
+            int n3 = Integer.MAX_VALUE;
+            int n4 = Integer.MIN_VALUE;
+            int n5 = Integer.MIN_VALUE;
+            for (int i = 0; i < n; ++i) {
+                int[] nArray = LakeCoverIndex.bounds(lakes.get(i));
+                n2 = Math.min(n2, nArray[0]);
+                n4 = Math.max(n4, nArray[1]);
+                n3 = Math.min(n3, nArray[2]);
+                n5 = Math.max(n5, nArray[3]);
+            }
+            if (n == 0) {
+                n2 = 0;
+                n3 = 0;
+                n4 = 0;
+                n5 = 0;
+            }
+            this.minBx = n2;
+            this.minBz = n3;
+            this.w = n4 - n2 + 1;
+            this.h = n5 - n3 + 1;
+            int n6 = this.w * this.h;
+            int[] nArray2 = new int[n6 + 1];
+            for (int i = 0; i < n; ++i) {
+                int[] nArray = LakeCoverIndex.bounds(lakes.get(i));
+                for (int j = nArray[2] - n3; j <= nArray[3] - n3; ++j) {
+                    for (int k = nArray[0] - n2; k <= nArray[1] - n2; ++k) {
+                        int n7 = j * this.w + k;
+                        nArray2[n7 + 1] = nArray2[n7 + 1] + 1;
+                    }
+                }
+            }
+            for (int i = 0; i < n6; ++i) {
+                nArray2[i + 1] = nArray2[i + 1] + nArray2[i];
+            }
+            this.start = nArray2;
+            this.items = new int[nArray2[n6]];
+            int[] nArray3 = Arrays.copyOf(nArray2, n6);
+            for (int i = 0; i < n; ++i) {
+                int[] nArray = LakeCoverIndex.bounds(lakes.get(i));
+                for (int j = nArray[2] - n3; j <= nArray[3] - n3; ++j) {
+                    for (int k = nArray[0] - n2; k <= nArray[1] - n2; ++k) {
+                        int n7 = j * this.w + k;
+                        this.items[nArray3[n7]] = i;
+                        nArray3[n7] = nArray3[n7] + 1;
+                    }
+                }
+            }
+        }
+
+        private static int[] bounds(Lake lake) {
+            int n = lake.spacing() >> 1;
+            int n2 = lake.cellMinX() - n;
+            int n3 = lake.cellMinZ() - n;
+            return new int[]{Math.floorDiv(n2, B), Math.floorDiv(n2 + lake.cellsWide() * lake.spacing() - 1, B), Math.floorDiv(n3, B), Math.floorDiv(n3 + lake.cellsHigh() * lake.spacing() - 1, B)};
+        }
+
+        int bucket(int n, int n2) {
+            int n3 = Math.floorDiv(n, B) - this.minBx;
+            int n4 = Math.floorDiv(n2, B) - this.minBz;
+            if (n3 < 0 || n3 >= this.w || n4 < 0 || n4 >= this.h) {
+                return -1;
+            }
+            return n4 * this.w + n3;
+        }
+
+        int from(int n) {
+            return n < 0 ? 0 : this.start[n];
+        }
+
+        int to(int n) {
+            return n < 0 ? 0 : this.start[n + 1];
+        }
+
+        int item(int n) {
+            return this.items[n];
+        }
+    }
+
     private record Connector(List<Pt> path, double wStart, double wEnd) {
     }
+
+    /**
+     * Open-addressing long-&gt;int table (count plus last segment index, 2^N slots, linear probing).
+     * It replaces the four HashMap&lt;Long,Integer&gt; maps chainIds used to allocate per call; keys are
+     * the very same quantized endpoint values from a(double,double), so counts and "last writer wins"
+     * indexes are unchanged. Only the iteration order differs, which is safe: the union-find result
+     * is a partition, every consumer (NetworkTracer, StreamPrefetcher) compares chain labels for
+     * equality only, and the set of union edges does not depend on iteration order.
+     */
+    private static final class ChainEndpointIndex {
+        final long[] keys;
+        final int[] counts;
+        final int[] ids;
+        private final int mask;
+
+        ChainEndpointIndex(int n) {
+            int n2 = 16;
+            while (n2 < n * 2) {
+                n2 <<= 1;
+            }
+            this.keys = new long[n2];
+            this.counts = new int[n2];
+            this.ids = new int[n2];
+            this.mask = n2 - 1;
+        }
+
+        private int slot(long l) {
+            long l2 = l * 0x9E3779B97F4A7C15L;
+            int n = (int)(l2 ^ l2 >>> 32) & this.mask;
+            while (this.counts[n] != 0 && this.keys[n] != l) {
+                n = n + 1 & this.mask;
+            }
+            return n;
+        }
+
+        void add(long l, int n) {
+            int n2 = this.slot(l);
+            if (this.counts[n2] == 0) {
+                this.keys[n2] = l;
+            }
+            ++this.counts[n2];
+            this.ids[n2] = n;
+        }
+
+        int count(long l) {
+            return this.counts[this.slot(l)];
+        }
+
+        int id(long l) {
+            return this.ids[this.slot(l)];
+        }
+    }
+
+    /**
+     * Primitive (double key, int value) min-heap that reproduces java.util.PriorityQueue's
+     * siftUp/siftDown array discipline with the same comparator (Double.compare on the key),
+     * so the pop order - including the order among equal keys - is identical to the boxed
+     * PriorityQueue of double[2] it replaces, but without a per-element allocation.
+     */
+    private static final class DoubleMinHeap {
+        private double[] keys = new double[16];
+        private int[] vals = new int[16];
+        private int size;
+
+        boolean isEmpty() {
+            return this.size == 0;
+        }
+
+        double key() {
+            return this.keys[0];
+        }
+
+        int value() {
+            return this.vals[0];
+        }
+
+        void add(double d, int n) {
+            if (this.size == this.keys.length) {
+                this.grow();
+            }
+            this.siftUp(this.size, d, n);
+            ++this.size;
+        }
+
+        void pop() {
+            int n = this.size - 1;
+            this.size = n;
+            if (n == 0) {
+                return;
+            }
+            this.siftDown(0, this.keys[n], this.vals[n]);
+        }
+
+        private void grow() {
+            int n = this.keys.length < 64 ? this.keys.length + 2 : this.keys.length + (this.keys.length >> 1);
+            this.keys = Arrays.copyOf(this.keys, n);
+            this.vals = Arrays.copyOf(this.vals, n);
+        }
+
+        private void siftUp(int n, double d, int n2) {
+            while (n > 0) {
+                int n3 = n - 1 >>> 1;
+                double d2 = this.keys[n3];
+                if (Double.compare(d, d2) >= 0) break;
+                this.keys[n] = d2;
+                this.vals[n] = this.vals[n3];
+                n = n3;
+            }
+            this.keys[n] = d;
+            this.vals[n] = n2;
+        }
+
+        private void siftDown(int n, double d, int n2) {
+            int n3 = this.size >>> 1;
+            while (n < n3) {
+                int n4 = (n << 1) + 1;
+                double d2 = this.keys[n4];
+                int n5 = this.vals[n4];
+                int n6 = n4 + 1;
+                if (n6 < this.size && Double.compare(d2, this.keys[n6]) > 0) {
+                    d2 = this.keys[n6];
+                    n5 = this.vals[n6];
+                    n4 = n6;
+                }
+                if (Double.compare(d, d2) <= 0) break;
+                this.keys[n] = d2;
+                this.vals[n] = n5;
+                n = n4;
+            }
+            this.keys[n] = d;
+            this.vals[n] = n2;
+        }
+    }
+
 }
 

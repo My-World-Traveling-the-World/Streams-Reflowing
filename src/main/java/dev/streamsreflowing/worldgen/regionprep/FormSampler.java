@@ -6,7 +6,6 @@ package dev.streamsreflowing.worldgen.regionprep;
 import dev.streamsreflowing.core.terrain.TerrainSampler;
 import dev.streamsreflowing.worldgen.regionprep.FieldForm;
 import dev.streamsreflowing.worldgen.regionprep.FormEval;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.LongAdder;
 
 public final class FormSampler
@@ -19,7 +18,16 @@ implements TerrainSampler {
     private final int f;
     private final double g;
     private final int h;
-    private final ConcurrentHashMap<Thread, Work> i = new ConcurrentHashMap();
+    // A38: this field used to be a Thread-keyed map standing in for a thread-local. Nothing ever
+    // removed the entries, so every sampler thread that retired parked its Work (FormEval plus a
+    // per-thread shape array) in that map for the life of the JVM. A real ThreadLocal is dropped with
+    // its thread, and its initial value is exactly what the old lookup built.
+    //
+    // Assigned in the constructor, not in a field initializer: a field initializer runs before the
+    // constructor body, so a lambda there cannot read the final fields b/c/d/e (javac: "might not
+    // have been initialized"). The constructor also captures the two values as locals instead of
+    // through `this`, so the lambda holds no reference to the sampler at all.
+    private final ThreadLocal<Work> i;
     private static final int j = 0;
     private volatile boolean k;
     public static final LongAdder handedBack = new LongAdder();
@@ -34,11 +42,16 @@ implements TerrainSampler {
         this.f = Math.max(1, n4);
         this.g = d;
         this.h = n5;
+        // Same expression the old computeIfAbsent lambda built, evaluated once here with constructor
+        // parameters as the captured values: new Work(fieldForm, (n2 - n) / n3 + 1).
+        final FieldForm form = fieldForm;
+        final int workSize = (n2 - n) / n3 + 1;
+        this.i = ThreadLocal.withInitial(() -> new Work(form, workSize));
     }
 
     @Override
     public double height(int n, int n2) {
-        Work work = this.i.computeIfAbsent(Thread.currentThread(), thread -> new Work(this.b, (this.d - this.c) / this.e + 1));
+        Work work = this.i.get();
         if (this.k && work.a.compute(n, this.h + 0, n2) <= this.g) {
             handedBack.increment();
             return this.a.height(n, n2);
@@ -57,7 +70,7 @@ implements TerrainSampler {
      * WARNING - Removed try catching itself - possible behaviour change.
      */
     public double heightWithSemantics(int n, int n2, boolean bl, boolean bl2) {
-        Work work = this.i.computeIfAbsent(Thread.currentThread(), thread -> new Work(this.b, (this.d - this.c) / this.e + 1));
+        Work work = this.i.get();
         boolean bl3 = work.a.d;
         boolean bl4 = work.a.e;
         try {
@@ -73,7 +86,7 @@ implements TerrainSampler {
     }
 
     public double density(int n, int n2, int n3) {
-        Work work = this.i.computeIfAbsent(Thread.currentThread(), thread -> new Work(this.b, (this.d - this.c) / this.e + 1));
+        Work work = this.i.get();
         return work.a.compute(n, n2, n3);
     }
 

@@ -143,6 +143,9 @@ public final class StreamsWorldgen {
     private static final int D = 120;
     private static final int E;
     private static final int F = 6;
+    private static final boolean BISHINT = Boolean.getBoolean("streamsreflowing.bishint");
+    private static final ThreadLocal<int[]> HINT = ThreadLocal.withInitial(() -> new int[]{Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE});
+    private static final ThreadLocal<MutableCtx> OPEN_CTX = ThreadLocal.withInitial(() -> new MutableCtx(0, 0, 0));
 
     private StreamsWorldgen() {
     }
@@ -168,27 +171,69 @@ public final class StreamsWorldgen {
 
     private static double a(DensityFunction densityFunction, int n, int n2, int n3, int n4, int n5) {
         int n6;
-        DensityFunction.SinglePointContext singlePointContext = new DensityFunction.SinglePointContext(n, n4, n2);
-        if (densityFunction.compute(singlePointContext) > 0.390625) {
-            return n4 + 1;
+        MutableCtx mutableCtx = new MutableCtx(n, n4, n2);
+        if (densityFunction.compute(mutableCtx) > 0.390625) {
+            return StreamsWorldgen.withHint(n, n2, n4 + 1);
         }
         int n7 = n3;
         int n8 = n4;
+        if (BISHINT) {
+            int[] nArray = HINT.get();
+            if (nArray[1] == n2 && n > nArray[0] && n - nArray[0] <= 64) {
+                int n9 = Math.min(n4, Math.max(n3, nArray[2]));
+                int n10 = Math.max(n3, n9 - 8);
+                int n11 = Math.min(n4, n9 + 8);
+                if (n10 < n11) {
+                    mutableCtx.y = n9;
+                    if (densityFunction.compute(mutableCtx) > 0.390625) {
+                        if (n11 == n4) {
+                            n7 = n9;
+                            n8 = n11;
+                        } else {
+                            mutableCtx.y = n11;
+                            if (!(densityFunction.compute(mutableCtx) > 0.390625)) {
+                                n7 = n9;
+                                n8 = n11;
+                            }
+                        }
+                    } else if (n10 == n3) {
+                        n7 = n10;
+                        n8 = n9;
+                    } else {
+                        mutableCtx.y = n10;
+                        if (densityFunction.compute(mutableCtx) > 0.390625) {
+                            n7 = n10;
+                            n8 = n9;
+                        }
+                    }
+                }
+            }
+        }
         while (n8 - n7 > 1) {
             n6 = n7 + n8 >>> 1;
-            DensityFunction.SinglePointContext singlePointContext2 = new DensityFunction.SinglePointContext(n, n6, n2);
-            if (densityFunction.compute(singlePointContext2) > 0.390625) {
+            mutableCtx.y = n6;
+            if (densityFunction.compute(mutableCtx) > 0.390625) {
                 n7 = n6;
                 continue;
             }
             n8 = n6;
         }
         n6 = Math.min(n4, n8 + n5);
-        DensityFunction.SinglePointContext singlePointContext3 = new DensityFunction.SinglePointContext(n, n6, n2);
-        if (densityFunction.compute(singlePointContext3) > 0.390625) {
-            return StreamsWorldgen.b(densityFunction, n, n2, n3, n4, n5);
+        mutableCtx.y = n6;
+        if (densityFunction.compute(mutableCtx) > 0.390625) {
+            return StreamsWorldgen.withHint(n, n2, StreamsWorldgen.b(densityFunction, n, n2, n3, n4, n5));
         }
-        return n7 + 1;
+        return StreamsWorldgen.withHint(n, n2, n7 + 1);
+    }
+
+    private static double withHint(int n, int n2, double d) {
+        if (BISHINT) {
+            int[] nArray = HINT.get();
+            nArray[0] = n;
+            nArray[1] = n2;
+            nArray[2] = (int)d;
+        }
+        return d;
     }
 
     private static DensityFunction a(DensityFunction densityFunction2) {
@@ -220,13 +265,14 @@ public final class StreamsWorldgen {
     }
 
     private static double b(DensityFunction densityFunction, int n, int n2, int n3, int n4, int n5) {
+        MutableCtx mutableCtx = new MutableCtx(n, 0, n2);
         for (int i = n4; i >= n3; i -= n5) {
             int n6;
-            DensityFunction.SinglePointContext singlePointContext = new DensityFunction.SinglePointContext(n, i, n2);
-            if (!(densityFunction.compute(singlePointContext) > 0.390625)) continue;
+            mutableCtx.y = i;
+            if (!(densityFunction.compute(mutableCtx) > 0.390625)) continue;
             for (int j = n6 = Math.min(n4, i + n5 - 1); j > i; --j) {
-                DensityFunction.SinglePointContext singlePointContext2 = new DensityFunction.SinglePointContext(n, j, n2);
-                if (!(densityFunction.compute(singlePointContext2) > 0.390625)) continue;
+                mutableCtx.y = j;
+                if (!(densityFunction.compute(mutableCtx) > 0.390625)) continue;
                 return j + 1;
             }
             return i + 1;
@@ -498,10 +544,12 @@ public final class StreamsWorldgen {
             double d3 = 0.0;
             int n5 = Integer.MIN_VALUE;
             StringBuilder stringBuilder = new StringBuilder();
+            MutableCtx mutableCtx = new MutableCtx(n, 0, n2);
             for (int i = n4; i >= n3; --i) {
                 double d4;
                 double d5 = formSampler.density(n, i, n2);
-                double d6 = Math.abs(d5 - (d4 = densityFunction.compute(new DensityFunction.SinglePointContext(n, i, n2))));
+                mutableCtx.y = i;
+                double d6 = Math.abs(d5 - (d4 = densityFunction.compute(mutableCtx)));
                 if (d6 > d3) {
                     d3 = d6;
                     n5 = i;
@@ -1159,10 +1207,14 @@ public final class StreamsWorldgen {
                     if (this.u == null) {
                         return (double)n2 > this.height(n, n3);
                     }
-                    return this.u.compute(new DensityFunction.SinglePointContext(n, n2, n3)) <= 0.390625;
+                    MutableCtx mutableCtx = OPEN_CTX.get();
+                    mutableCtx.x = n;
+                    mutableCtx.y = n2;
+                    mutableCtx.z = n3;
+                    return this.u.compute(mutableCtx) <= 0.390625;
                 }
             };
-            CachingTerrainSampler cachingTerrainSampler = new CachingTerrainSampler(terrainSampler5, 65536, -1000.0);
+            CachingTerrainSampler cachingTerrainSampler = new CachingTerrainSampler(terrainSampler5, 262144, -1000.0);
             WetnessSampler wetnessSampler = (n, n2, n3) -> Services.PLATFORM.biomeWetness(biomeSource.getNoiseBiome(QuartPos.fromBlock(n), QuartPos.fromBlock(n2), QuartPos.fromBlock(n3), sampler));
             int n9 = Services.PLATFORM.gridSpacing();
             RiverEngine riverEngine2 = new RiverEngine(l, StreamsConfig.defaults(n9, Services.PLATFORM.widthScale(), Services.PLATFORM.plateScale(), Services.PLATFORM.terrainSampleSpacing(), Services.PLATFORM.valleySnapRadius()).withMinRiverAccumulation(6.0).withWetnessMultiplier(Services.PLATFORM.wetnessMultiplier()).withWetnessDryFloor(Services.PLATFORM.wetnessDryFloor()).withLakeArea(Services.PLATFORM.generateLakes() ? Services.PLATFORM.lakeMinArea() : Double.MAX_VALUE, Services.PLATFORM.lakeMaxArea()).withMinSeaChainNodes(Services.PLATFORM.minStreamLength() / n9).withOutletBiomes(Services.PLATFORM.outletBiomes()).withConnect(Services.PLATFORM.connectNearbyWater(), Services.PLATFORM.connectRadius()).withSinkRooted(Services.PLATFORM.sinkRooted()).withGrowDensity(Services.PLATFORM.growDensity()).withConfineToBanks(Services.PLATFORM.confineToBanks()).withContainmentBerm(Services.PLATFORM.containmentBerm()).withAppearance(Services.PLATFORM.meanderStrength(), Services.PLATFORM.baseWidth(), Services.PLATFORM.maxWidth(), Services.PLATFORM.streamDepth()).withBankNoise(Services.PLATFORM.bankNoise()), cachingTerrainSampler, wetnessSampler);
@@ -1582,6 +1634,20 @@ public final class StreamsWorldgen {
     }
 
     private record BandCorrection(double[] centers, double[] bias, boolean[] safe) {
+        private int bandOf(double d) {
+            int n = 0;
+            int n2 = this.centers.length;
+            while (n < n2) {
+                int n3 = n + n2 >>> 1;
+                if (this.centers[n3] < d) {
+                    n = n3 + 1;
+                    continue;
+                }
+                n2 = n3;
+            }
+            return n;
+        }
+
         double correct(double d) {
             if (this.centers.length == 1 || d <= this.centers[0]) {
                 return d - this.bias[0];
@@ -1589,9 +1655,12 @@ public final class StreamsWorldgen {
             if (d >= this.centers[this.centers.length - 1]) {
                 return d - this.bias[this.bias.length - 1];
             }
-            int n = 1;
-            while (this.centers[n] < d) {
-                ++n;
+            int n = this.bandOf(d);
+            if (n < 1) {
+                n = 1;
+            }
+            if (n > this.centers.length - 1) {
+                n = this.centers.length - 1;
             }
             double d2 = (d - this.centers[n - 1]) / (this.centers[n] - this.centers[n - 1]);
             return d - (this.bias[n - 1] + d2 * (this.bias[n] - this.bias[n - 1]));
@@ -1605,7 +1674,9 @@ public final class StreamsWorldgen {
             if (this.centers.length == 1) {
                 return this.safe[0];
             }
-            for (n = 1; n < this.centers.length && this.centers[n] < d; ++n) {
+            n = this.bandOf(d);
+            if (n < 1) {
+                n = 1;
             }
             boolean bl = this.safe[Math.max(0, n - 1)];
             boolean bl2 = this.safe[Math.min(this.safe.length - 1, n)];
@@ -1619,6 +1690,34 @@ public final class StreamsWorldgen {
                 ++n;
             }
             return n;
+        }
+    }
+
+    private static final class MutableCtx
+    implements DensityFunction.FunctionContext {
+        int x;
+        int y;
+        int z;
+
+        MutableCtx(int n, int n2, int n3) {
+            this.x = n;
+            this.y = n2;
+            this.z = n3;
+        }
+
+        @Override
+        public int blockX() {
+            return this.x;
+        }
+
+        @Override
+        public int blockY() {
+            return this.y;
+        }
+
+        @Override
+        public int blockZ() {
+            return this.z;
         }
     }
 

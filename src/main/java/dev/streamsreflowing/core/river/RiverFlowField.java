@@ -37,6 +37,9 @@ public final class RiverFlowField {
     public static volatile int lastSampled;
     public static volatile int lastCells;
     private static final long r = 9221120239188049920L;
+    private static final ThreadLocal<int[]> s = ThreadLocal.withInitial(() -> new int[25]);
+    private static final ThreadLocal<float[]> t = ThreadLocal.withInitial(() -> new float[25]);
+    private static final boolean u = Boolean.getBoolean("streamsreflowing.bucketqueue");
 
     private RiverFlowField(int n, int n2, int n3, int n4, int n5, byte[] byArray, int n6, int n7, int n8) {
         this.h = n;
@@ -196,7 +199,8 @@ public final class RiverFlowField {
         byte[] byArray = new byte[n19 * n20];
         float[] fArray = new float[n19 * n20];
         Arrays.fill(fArray, Float.POSITIVE_INFINITY);
-        PriorityQueue<Long> priorityQueue = new PriorityQueue<Long>();
+        PriorityQueue<Long> priorityQueue = RiverFlowField.u ? null : new PriorityQueue<Long>();
+        RiverFlowField.BucketQueue bucketQueue = RiverFlowField.u ? new RiverFlowField.BucketQueue() : null;
         RiverFlowField.a(byArray, n19, n20, n17, n18, n6, n7, biomeClass);
         int n21 = 0;
         int n22 = 0;
@@ -248,10 +252,21 @@ public final class RiverFlowField {
         for (n16 = 0; n16 < n19 * n20; ++n16) {
             if (!blArray[n16]) continue;
             fArray[n16] = 0.0f;
-            priorityQueue.add(RiverFlowField.a(0.0f, n16));
+            if (bucketQueue != null) {
+                bucketQueue.add(RiverFlowField.a(0.0f, n16));
+            } else {
+                priorityQueue.add(RiverFlowField.a(0.0f, n16));
+            }
         }
-        while (!priorityQueue.isEmpty()) {
-            long l = (Long)priorityQueue.poll();
+        while (true) {
+            long l;
+            if (bucketQueue != null) {
+                if (bucketQueue.isEmpty()) break;
+                l = bucketQueue.poll();
+            } else {
+                if (priorityQueue.isEmpty()) break;
+                l = (Long)priorityQueue.poll();
+            }
             n14 = (int)(l & 0xFFFFFFFFL);
             float f = Float.intBitsToFloat((int)(l >>> 32));
             if (f > fArray[n14]) continue;
@@ -263,7 +278,11 @@ public final class RiverFlowField {
                 n9 = n12 + b[n11];
                 if (n10 < 0 || n9 < 0 || n10 >= n19 || n9 >= n20 || byArray[n8 = n9 * n19 + n10] != 1 || !((f2 = f + ((n11 & 1) == 0 ? 1.0f : (float)c)) < fArray[n8])) continue;
                 fArray[n8] = f2;
-                priorityQueue.add(RiverFlowField.a(f2, n8));
+                if (bucketQueue != null) {
+                    bucketQueue.add(RiverFlowField.a(f2, n8));
+                } else {
+                    priorityQueue.add(RiverFlowField.a(f2, n8));
+                }
             }
         }
         byte[] byArray2 = new byte[n19 * n20];
@@ -315,16 +334,25 @@ public final class RiverFlowField {
     }
 
     private static int a(float[] fArray, int n, int n2, int n3, int n4) {
+        int[] nArray = RiverFlowField.s.get();
+        float[] fArray2 = RiverFlowField.t.get();
         double d = 0.0;
         double d2 = 0.0;
         double d3 = 0.0;
         double d4 = 0.0;
+        int n5 = 0;
         for (int i = -2; i <= 2; ++i) {
+            int n6 = n4 + i;
+            if (n6 < 0 || n6 >= n2) continue;
+            int n7 = n6 * n;
             for (int j = -2; j <= 2; ++j) {
-                float f;
-                int n5 = n3 + j;
-                int n6 = n4 + i;
-                if (n5 < 0 || n6 < 0 || n5 >= n || n6 >= n2 || (f = fArray[n6 * n + n5]) == Float.POSITIVE_INFINITY) continue;
+                int n8 = n3 + j;
+                if (n8 < 0 || n8 >= n) continue;
+                float f = fArray[n7 + n8];
+                if (f == Float.POSITIVE_INFINITY) continue;
+                nArray[n5] = j + 2 | i + 2 << 3;
+                fArray2[n5] = f;
+                ++n5;
                 d += 1.0;
                 d2 += (double)j;
                 d3 += (double)i;
@@ -342,21 +370,16 @@ public final class RiverFlowField {
         double d10 = 0.0;
         double d11 = 0.0;
         double d12 = 0.0;
-        for (int i = -2; i <= 2; ++i) {
-            for (int j = -2; j <= 2; ++j) {
-                float f;
-                int n7 = n3 + j;
-                int n8 = n4 + i;
-                if (n7 < 0 || n8 < 0 || n7 >= n || n8 >= n2 || (f = fArray[n8 * n + n7]) == Float.POSITIVE_INFINITY) continue;
-                double d13 = (double)j - d5;
-                double d14 = (double)i - d6;
-                double d15 = (double)f - d7;
-                d8 += d13 * d13;
-                d9 += d13 * d14;
-                d10 += d14 * d14;
-                d11 += d13 * d15;
-                d12 += d14 * d15;
-            }
+        for (int i = 0; i < n5; ++i) {
+            int n9 = nArray[i];
+            double d13 = (double)((n9 & 7) - 2) - d5;
+            double d14 = (double)((n9 >> 3) - 2) - d6;
+            double d15 = (double)fArray2[i] - d7;
+            d8 += d13 * d13;
+            d9 += d13 * d14;
+            d10 += d14 * d14;
+            d11 += d13 * d15;
+            d12 += d14 * d15;
         }
         double d16 = 0.001 * (d8 + d10) + 1.0E-6;
         double d17 = d8 + d16;
@@ -437,6 +460,58 @@ public final class RiverFlowField {
         for (int i = 0; i < 8; ++i) {
             RiverFlowField.f[i] = Math.cos((double)i * 0.7853981633974483);
             RiverFlowField.g[i] = Math.sin((double)i * 0.7853981633974483);
+        }
+    }
+
+    private static final class BucketQueue {
+        private static final int LEVELS = 512;
+        private static final int MASK = 511;
+        private final long[][] slots = new long[LEVELS][];
+        private final int[] sizes = new int[LEVELS];
+        private int level;
+        private int pending;
+
+        private BucketQueue() {
+        }
+
+        private boolean isEmpty() {
+            return this.pending == 0;
+        }
+
+        private void add(long l) {
+            int n = (int)((double)Float.intBitsToFloat((int)(l >>> 32)) * 64.0) - this.level;
+            if (n < 0) {
+                n = 0;
+            }
+            if (n > 511) {
+                n = 511;
+            }
+            int n2 = (this.level + n) & 511;
+            long[] lArray = this.slots[n2];
+            if (lArray == null) {
+                lArray = new long[4];
+                this.slots[n2] = lArray;
+            } else if (this.sizes[n2] == lArray.length) {
+                lArray = Arrays.copyOf(lArray, lArray.length * 2);
+                this.slots[n2] = lArray;
+            }
+            lArray[this.sizes[n2]++] = l;
+            ++this.pending;
+        }
+
+        private long poll() {
+            while (this.pending > 0) {
+                int n = this.level & 511;
+                int n2 = this.sizes[n];
+                if (n2 > 0) {
+                    long l = this.slots[n][--n2];
+                    this.sizes[n] = n2;
+                    --this.pending;
+                    return l;
+                }
+                ++this.level;
+            }
+            return 0L;
         }
     }
 

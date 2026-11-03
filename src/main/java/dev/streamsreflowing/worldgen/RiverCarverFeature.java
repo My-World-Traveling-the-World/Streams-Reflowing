@@ -150,6 +150,7 @@ extends Feature<NoneFeatureConfiguration> {
     private static final Map<ResourceKey<Level>, Map<Long, int[]>> aE;
     private static final int aF = 2048;
     private static final int aG = 2;
+    private static final boolean aH = Boolean.getBoolean("streamsreflowing.noearlyout");
 
     private static void a(WorldGenLevel worldGenLevel, int n, int n2, BlockState[] blockStateArray, BlockState[] blockStateArray2) {
         ServerLevel serverLevel = worldGenLevel.getLevel();
@@ -218,6 +219,12 @@ extends Feature<NoneFeatureConfiguration> {
         WorldGenLevel worldGenLevel = featurePlaceContext.level();
         RiverEngine riverEngine = StreamsWorldgen.engine(worldGenLevel);
         RandomSource randomSource = featurePlaceContext.random();
+        if (!RiverCarverFeature.aH) {
+            ChunkPos chunkPosEarly = new ChunkPos(featurePlaceContext.origin());
+            if (!riverEngine.corridorNearChunk(chunkPosEarly.getMinBlockX(), chunkPosEarly.getMinBlockZ(), 16) && !riverEngine.lakeNearChunk(chunkPosEarly.getMinBlockX(), chunkPosEarly.getMinBlockZ(), 16)) {
+                return false;
+            }
+        }
         FlowTrace.carvedChunks.incrementAndGet();
         ChunkPos chunkPos = new ChunkPos(featurePlaceContext.origin());
         int n16 = chunkPos.getMinBlockX();
@@ -367,7 +374,7 @@ extends Feature<NoneFeatureConfiguration> {
                 ColumnPlan columnPlan;
                 n11 = n16 + n13;
                 n10 = n17 + n12;
-                columnPlanArray[n13 * 16 + n12] = columnPlan = riverEngine.plan(n11, n10);
+                columnPlanArray[n13 * 16 + n12] = columnPlan = columnPlanArray[n13 * 16 + n12];
                 if (columnPlan == ColumnPlan.NONE || !columnPlan.inChannel()) continue;
                 nArray8[n13 * 16 + n12] = RiverCarverFeature.a(worldGenLevel, riverEngine, mutableBlockPos, n11, n10, columnPlan, n19);
             }
@@ -407,25 +414,45 @@ extends Feature<NoneFeatureConfiguration> {
             }
         }
         int[] nArray13 = (int[])nArray8.clone();
-        for (n10 = 0; n10 < 16; ++n10) {
-            for (int i = 0; i < 16; ++i) {
-                if (nArray8[n10 * 16 + i] == Integer.MAX_VALUE) continue;
-                int n30 = 0;
-                n8 = 0;
-                n7 = Integer.MAX_VALUE;
-                for (n6 = -4; n6 <= 4; ++n6) {
-                    for (n5 = -4; n5 <= 4; ++n5) {
-                        int n31;
-                        n4 = n10 + n6;
-                        n3 = i + n5;
-                        if (n4 < 0 || n4 > 15 || n3 < 0 || n3 > 15 || (n31 = nArray8[n4 * 16 + n3]) == Integer.MAX_VALUE) continue;
-                        ++n8;
-                        if (n31 == Integer.MIN_VALUE) continue;
-                        ++n30;
-                        n7 = Math.min(n7, n31);
-                    }
+        int[] p8RowCount = new int[256];
+        int[] p8RowValid = new int[256];
+        int[] p8RowMin = new int[256];
+        for (int p8r = 0; p8r < 16; ++p8r) {
+            for (int p8c = 0; p8c < 16; ++p8c) {
+                int p8cnt = 0;
+                int p8val = 0;
+                int p8min = Integer.MAX_VALUE;
+                for (int p8k = -4; p8k <= 4; ++p8k) {
+                    int p8cc = p8c + p8k;
+                    if (p8cc < 0 || p8cc > 15) continue;
+                    int p8v = nArray8[p8r * 16 + p8cc];
+                    if (p8v == Integer.MAX_VALUE) continue;
+                    ++p8cnt;
+                    if (p8v == Integer.MIN_VALUE) continue;
+                    ++p8val;
+                    p8min = Math.min(p8min, p8v);
                 }
-                nArray13[n10 * 16 + i] = n30 * 2 > n8 ? n7 : Integer.MIN_VALUE;
+                p8RowCount[p8r * 16 + p8c] = p8cnt;
+                p8RowValid[p8r * 16 + p8c] = p8val;
+                p8RowMin[p8r * 16 + p8c] = p8min;
+            }
+        }
+        for (int p8r = 0; p8r < 16; ++p8r) {
+            for (int p8c = 0; p8c < 16; ++p8c) {
+                if (nArray8[p8r * 16 + p8c] == Integer.MAX_VALUE) continue;
+                int p8cnt = 0;
+                int p8val = 0;
+                int p8min = Integer.MAX_VALUE;
+                for (int p8k = -4; p8k <= 4; ++p8k) {
+                    int p8rr = p8r + p8k;
+                    if (p8rr < 0 || p8rr > 15) continue;
+                    int p8idx = p8rr * 16 + p8c;
+                    p8cnt += p8RowCount[p8idx];
+                    p8val += p8RowValid[p8idx];
+                    if (p8RowValid[p8idx] == 0) continue;
+                    p8min = Math.min(p8min, p8RowMin[p8idx]);
+                }
+                nArray13[p8r * 16 + p8c] = p8val * 2 > p8cnt ? p8min : Integer.MIN_VALUE;
             }
         }
         System.arraycopy(nArray13, 0, nArray8, 0, nArray8.length);
@@ -628,7 +655,7 @@ extends Feature<NoneFeatureConfiguration> {
                         ++n2;
                     }
                     int n60 = 6;
-                    int n61 = n48 = RiverCarverFeature.a(worldGenLevel, mutableBlockPos, n49, n8, columnPlan5, n19) != Integer.MIN_VALUE ? 1 : 0;
+                    int n61 = n48 = RiverCarverFeature.a(worldGenLevel, mutableBlockPos, n49, n8, columnPlan5, n19, Math.hypot(columnPlan5.flowDirX(), columnPlan5.flowDirZ())) != Integer.MIN_VALUE ? 1 : 0;
                     if (RiverCarverFeature.c(n49, n8)) {
                         RiverCarverFeature.b(n49, n8, "FLUSH check fluidTop=" + n2 + " margin=" + n60 + " fullWidth=" + (n48 != 0) + " chan=" + columnPlan5.inChannel() + " skip=" + (columnPlan5.terminal() || columnPlan5.inChannel() && n48 != 0 && columnPlan5.waterSurfaceY() <= n2 + n60));
                     }
@@ -671,6 +698,7 @@ extends Feature<NoneFeatureConfiguration> {
                     int n66;
                     double d7;
                     double d8;
+                    d8 = Math.hypot(columnPlan5.flowDirX(), columnPlan5.flowDirZ());
                     n = riverEngine.config().containmentBerm() && !bl5 && n6 == 0 ? 1 : 0;
                     int n67 = columnPlan5.waterSurfaceY();
                     n47 = Integer.MAX_VALUE;
@@ -684,7 +712,7 @@ extends Feature<NoneFeatureConfiguration> {
                     if (columnPlan5.source() && n7 - 1 > n18) {
                         n46 = RiverCarverFeature.a(n49, n8, "source recess", n46, Math.min(n46, n7 - 1));
                     }
-                    if ((n45 = RiverCarverFeature.a(riverEngine, worldGenLevel, columnPlan5, n49, n8, n7, RiverCarverFeature.nearbyLakeLevel(riverEngine, n49, n8, n18, n19), n20, n18, n19)) != Integer.MIN_VALUE) {
+                    if ((n45 = RiverCarverFeature.a(riverEngine, worldGenLevel, columnPlan5, n49, n8, n7, RiverCarverFeature.nearbyLakeLevel(riverEngine, n49, n8, n18, n19), n20, n18, n19, d8)) != Integer.MIN_VALUE) {
                         n46 = RiverCarverFeature.a(n49, n8, "lake level-out (" + n45 + ")", n46, Mth.clamp(Math.max(n46, n45), n18, n19));
                     }
                     if (object2 != null && ((Lake)object2).level() >= n46 && n7 < ((Lake)object2).level()) {
@@ -696,7 +724,7 @@ extends Feature<NoneFeatureConfiguration> {
                     if (n3 != Integer.MIN_VALUE) {
                         n46 = RiverCarverFeature.a(n49, n8, "flood level (" + n3 + ")", n46, Mth.clamp(Math.max(n46, n3), n18, n19));
                     }
-                    if ((d8 = Math.hypot(columnPlan5.flowDirX(), columnPlan5.flowDirZ())) > 1.0E-6) {
+                    if (d8 > 1.0E-6) {
                         double d9 = -columnPlan5.flowDirZ() / d8;
                         d7 = columnPlan5.flowDirX() / d8;
                         for (n44 = -1; n44 <= 1; n44 += 2) {
@@ -733,8 +761,8 @@ extends Feature<NoneFeatureConfiguration> {
                     if (RiverCarverFeature.c(n49, n8)) {
                         RiverCarverFeature.b(n49, n8, "CHANNEL surface=" + n46 + " bed=" + n42 + " top=" + Math.min(n19, Math.max(n7, n46)) + " supported=" + bl7 + " contain=" + (n != 0));
                     }
-                    int n69 = n42 - n7 >= 4 ? RiverCarverFeature.a(worldGenLevel, mutableBlockPos, n49, n8, columnPlan5, n19) : Integer.MIN_VALUE;
-                    boolean bl8 = bl6 = n69 != Integer.MIN_VALUE && (n42 - n7 >= 4 && !RiverCarverFeature.a(worldGenLevel, riverEngine, n49, n8, columnPlan5, n69) || columnPlan5.distToOutlet() <= 24.0);
+                    int n69 = n42 - n7 >= 4 ? RiverCarverFeature.a(worldGenLevel, mutableBlockPos, n49, n8, columnPlan5, n19, d8) : Integer.MIN_VALUE;
+                    boolean bl8 = bl6 = n69 != Integer.MIN_VALUE && (n42 - n7 >= 4 && !RiverCarverFeature.a(worldGenLevel, riverEngine, n49, n8, columnPlan5, n69, d8) || columnPlan5.distToOutlet() <= 24.0);
                     if (bl6 && RiverCarverFeature.c(n49, n8)) {
                         RiverCarverFeature.b(n49, n8, "CUP released: waterfall over water (ground=" + n7 + " waterTop=" + n69 + " bed=" + n42 + ")");
                     }
@@ -783,7 +811,8 @@ extends Feature<NoneFeatureConfiguration> {
                     RiverCarverFeature.a(n49, n8, "== BERM derivation ==");
                     RiverCarverFeature.a(n49, n8, "  base waterLevel=" + n + " ground=" + n7);
                 }
-                if ((n40 = RiverCarverFeature.a(riverEngine, worldGenLevel, columnPlan5, n49, n8, n7, RiverCarverFeature.nearbyLakeLevel(riverEngine, n49, n8, n18, n19), n20, n18, n19)) != Integer.MIN_VALUE) {
+                int n77 = RiverCarverFeature.nearbyLakeLevel(riverEngine, n49, n8, n18, n19);
+                if ((n40 = RiverCarverFeature.a(riverEngine, worldGenLevel, columnPlan5, n49, n8, n7, n77, n20, n18, n19)) != Integer.MIN_VALUE) {
                     n = RiverCarverFeature.a(n49, n8, "berm lake level-out (" + n40 + ")", n, Math.max(n, n40));
                 }
                 if (object2 != null && ((Lake)object2).level() >= n) {
@@ -815,7 +844,7 @@ extends Feature<NoneFeatureConfiguration> {
                 }
                 double d11 = columnPlan5.upstreamSlope();
                 boolean bl10 = false;
-                if (d11 >= 0.15 && (d3 = Math.hypot(columnPlan5.flowDirX(), columnPlan5.flowDirZ())) > 1.0E-6 && (object = riverEngine.plan(n42 = n49 - (int)Math.round(4.0 * columnPlan5.flowDirX() / d3), n41 = n8 - (int)Math.round(4.0 * columnPlan5.flowDirZ() / d3))) != null && object != ColumnPlan.NONE && (d = Math.hypot(((ColumnPlan)object).flowDirX(), ((ColumnPlan)object).flowDirZ())) > 1.0E-6) {
+                if (d11 >= 0.15 && (d3 = d10) > 1.0E-6 && (object = riverEngine.plan(n42 = n49 - (int)Math.round(4.0 * columnPlan5.flowDirX() / d3), n41 = n8 - (int)Math.round(4.0 * columnPlan5.flowDirZ() / d3))) != null && object != ColumnPlan.NONE && (d = Math.hypot(((ColumnPlan)object).flowDirX(), ((ColumnPlan)object).flowDirZ())) > 1.0E-6) {
                     double d12 = (columnPlan5.flowDirX() * ((ColumnPlan)object).flowDirX() + columnPlan5.flowDirZ() * ((ColumnPlan)object).flowDirZ()) / (d3 * d);
                     bl10 = d12 < 0.906;
                 }
@@ -890,8 +919,7 @@ extends Feature<NoneFeatureConfiguration> {
                 }
                 n41 = Integer.MAX_VALUE;
                 int n76 = Math.min(Math.min(columnPlan5.waterSurfaceY(), n7), n41);
-                int n77 = RiverCarverFeature.nearbyLakeLevel(riverEngine, n49, n8, n18, n19);
-                int n78 = RiverCarverFeature.a(riverEngine, worldGenLevel, columnPlan5, n49, n8, n7, n77, n20, n18, n19);
+                int n78 = n40;
                 if (n78 != Integer.MIN_VALUE) {
                     n76 = Math.max(n76, n78);
                 }
@@ -1170,20 +1198,25 @@ extends Feature<NoneFeatureConfiguration> {
         int n4;
         int n5 = 18;
         int[] nArray2 = new int[324];
-        for (n4 = -1; n4 <= 16; ++n4) {
-            for (n3 = -1; n3 <= 16; ++n3) {
-                nArray2[(n4 + 1) * 18 + (n3 + 1)] = RiverCarverFeature.a(worldGenLevel, n + n4, n2 + n3);
-            }
-        }
+        boolean[] blArray = new boolean[324];
         for (n4 = 0; n4 < 2; ++n4) {
             for (n3 = -1; n3 <= 15; ++n3) {
+                boolean bl2 = false;
+                for (int i = 0; i < 16 && !bl2; ++i) {
+                    int n7 = n4 == 0 ? i : n3;
+                    int n8 = n4 == 0 ? n3 : i;
+                    int n9 = n4 == 0 ? i : n3 + 1;
+                    int n10 = n4 == 0 ? n3 + 1 : i;
+                    bl2 = RiverCarverFeature.a(nArray, n7, n8) || RiverCarverFeature.a(nArray, n9, n10);
+                }
+                if (!bl2) continue;
                 int n6 = 0;
                 for (int i = 0; i < 16; ++i) {
                     int n7 = n4 == 0 ? i : n3;
                     int n8 = n4 == 0 ? n3 : i;
                     int n9 = n4 == 0 ? i : n3 + 1;
                     int n10 = n4 == 0 ? n3 + 1 : i;
-                    boolean bl = (RiverCarverFeature.a(nArray, n7, n8) || RiverCarverFeature.a(nArray, n9, n10)) && Math.abs(nArray2[(n7 + 1) * 18 + (n8 + 1)] - nArray2[(n9 + 1) * 18 + (n10 + 1)]) >= 3;
+                    boolean bl = (RiverCarverFeature.a(nArray, n7, n8) || RiverCarverFeature.a(nArray, n9, n10)) && Math.abs(RiverCarverFeature.cachedHeightAt(worldGenLevel, n, n2, nArray2, blArray, n7, n8) - RiverCarverFeature.cachedHeightAt(worldGenLevel, n, n2, nArray2, blArray, n9, n10)) >= 3;
                     int n11 = n6 = bl ? n6 + 1 : 0;
                     if (n6 < 3) continue;
                     return true;
@@ -1191,6 +1224,15 @@ extends Feature<NoneFeatureConfiguration> {
             }
         }
         return false;
+    }
+
+    private static int cachedHeightAt(WorldGenLevel worldGenLevel, int n, int n2, int[] nArray, boolean[] blArray, int n3, int n4) {
+        int n5 = (n3 + 1) * 18 + (n4 + 1);
+        if (!blArray[n5]) {
+            nArray[n5] = RiverCarverFeature.a(worldGenLevel, n + n3, n2 + n4);
+            blArray[n5] = true;
+        }
+        return nArray[n5];
     }
 
     private static boolean a(int[] nArray, int n, int n2) {
@@ -1387,6 +1429,12 @@ extends Feature<NoneFeatureConfiguration> {
             blArray6[n22] = blockState4.is(BlockTags.LOGS) || blockState4.is(BlockTags.LEAVES);
         }
         int[] object = (int[])nArray3.clone();
+        byte[] seedMod6 = new byte[400];
+        for (int seedX = -2; seedX < 18; ++seedX) {
+            for (int seedZ = -2; seedZ < 18; ++seedZ) {
+                seedMod6[(seedX + 2) * 20 + (seedZ + 2)] = (byte)Math.floorMod(Mth.getSeed(n + seedX, 0, n2 + seedZ), 6L);
+            }
+        }
         for (n22 = 0; n22 < 32; ++n22) {
             boolean bl3 = false;
             for (n18 = -2; n18 < 18; ++n18) {
@@ -1399,7 +1447,7 @@ extends Feature<NoneFeatureConfiguration> {
                     n14 = i + 2;
                     n13 = n + n18;
                     n12 = n2 + i;
-                    long l = Math.floorMod(Mth.getSeed(n13, 0, n12), 6L);
+                    long l = seedMod6[n17];
                     n11 = Math.min(6, n26 + n22);
                     n10 = Math.max(1, n11 + (l == 0L ? -1 : (l == 5L ? 1 : 0)));
                     n9 = nArray3[n17];
@@ -2324,7 +2372,14 @@ extends Feature<NoneFeatureConfiguration> {
         if (n4 == Integer.MIN_VALUE || columnPlan.distToOutlet() > 24.0) {
             return Integer.MIN_VALUE;
         }
-        int n8 = RiverCarverFeature.a(riverEngine, worldGenLevel, n, n2, columnPlan, n5, n6, n7);
+        return RiverCarverFeature.a(riverEngine, worldGenLevel, columnPlan, n, n2, n3, n4, n5, n6, n7, Math.hypot(columnPlan.flowDirX(), columnPlan.flowDirZ()));
+    }
+
+    private static int a(RiverEngine riverEngine, WorldGenLevel worldGenLevel, ColumnPlan columnPlan, int n, int n2, int n3, int n4, int n5, int n6, int n7, double d) {
+        if (n4 == Integer.MIN_VALUE || columnPlan.distToOutlet() > 24.0) {
+            return Integer.MIN_VALUE;
+        }
+        int n8 = RiverCarverFeature.a(riverEngine, worldGenLevel, n, n2, columnPlan, n5, n6, n7, d);
         int n9 = Math.min(Math.min(n4, n8), n3);
         return (n9 = Math.min(n9, columnPlan.waterSurfaceY() + 4)) > columnPlan.waterSurfaceY() ? n9 : Integer.MIN_VALUE;
     }
@@ -2342,8 +2397,7 @@ extends Feature<NoneFeatureConfiguration> {
         return n6;
     }
 
-    private static int a(RiverEngine riverEngine, WorldGenLevel worldGenLevel, int n, int n2, ColumnPlan columnPlan, int n3, int n4, int n5) {
-        double d = Math.hypot(columnPlan.flowDirX(), columnPlan.flowDirZ());
+    private static int a(RiverEngine riverEngine, WorldGenLevel worldGenLevel, int n, int n2, ColumnPlan columnPlan, int n3, int n4, int n5, double d) {
         if (d < 1.0E-6) {
             return Integer.MAX_VALUE;
         }
@@ -2604,21 +2658,20 @@ extends Feature<NoneFeatureConfiguration> {
         double d2 = columnPlan.flowDirX() / d;
         double d3 = columnPlan.flowDirZ() / d;
         int n7 = n3;
-        int n8 = RiverCarverFeature.a(worldGenLevel, mutableBlockPos, n, n2, columnPlan, n4);
+        int n8 = RiverCarverFeature.a(worldGenLevel, mutableBlockPos, n, n2, columnPlan, n4, d);
         if (n8 != Integer.MIN_VALUE && n8 < n7) {
             n7 = n8;
         }
         for (int i = 3; i <= 48 && RiverCarverFeature.a(n6 = n - (int)Math.round(d2 * (double)i), n5 = n2 - (int)Math.round(d3 * (double)i)); i += 3) {
             int n9;
             ColumnPlan columnPlan2 = riverEngine.plan(n6, n5);
-            if (columnPlan2 == ColumnPlan.NONE || !columnPlan2.inChannel() || (n9 = RiverCarverFeature.a(worldGenLevel, mutableBlockPos, n6, n5, columnPlan2, n4)) == Integer.MIN_VALUE || n9 >= n7) continue;
+            if (columnPlan2 == ColumnPlan.NONE || !columnPlan2.inChannel() || (n9 = RiverCarverFeature.a(worldGenLevel, mutableBlockPos, n6, n5, columnPlan2, n4, Math.hypot(columnPlan2.flowDirX(), columnPlan2.flowDirZ()))) == Integer.MIN_VALUE || n9 >= n7) continue;
             n7 = n9;
         }
         return n7;
     }
 
-    private static int a(WorldGenLevel worldGenLevel, BlockPos.MutableBlockPos mutableBlockPos, int n, int n2, ColumnPlan columnPlan, int n3) {
-        double d = Math.hypot(columnPlan.flowDirX(), columnPlan.flowDirZ());
+    private static int a(WorldGenLevel worldGenLevel, BlockPos.MutableBlockPos mutableBlockPos, int n, int n2, ColumnPlan columnPlan, int n3, double d) {
         if (d < 1.0E-6) {
             return Integer.MIN_VALUE;
         }
@@ -2677,8 +2730,7 @@ extends Feature<NoneFeatureConfiguration> {
         return n6;
     }
 
-    private static boolean a(WorldGenLevel worldGenLevel, RiverEngine riverEngine, int n, int n2, ColumnPlan columnPlan, int n3) {
-        double d = Math.hypot(columnPlan.flowDirX(), columnPlan.flowDirZ());
+    private static boolean a(WorldGenLevel worldGenLevel, RiverEngine riverEngine, int n, int n2, ColumnPlan columnPlan, int n3, double d) {
         if (d < 1.0E-6) {
             return false;
         }

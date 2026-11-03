@@ -12,11 +12,36 @@ public final class PlateLattice {
     private final double c;
     private static final int d = 1023;
     private final PlateKey[] e = new PlateKey[1024];
+    private final ThreadLocal<Seeds> f = ThreadLocal.withInitial(Seeds::new);
 
     public PlateLattice(long l, double d, double d2) {
         this.a = l;
         this.b = d;
         this.c = Math.min(0.49, Math.max(0.0, d2));
+    }
+
+    private static final class Seeds {
+        int a = Integer.MIN_VALUE;
+        int b = Integer.MIN_VALUE;
+        final double[] c = new double[9];
+        final double[] d = new double[9];
+    }
+
+    private Seeds seeds(int n, int n2) {
+        Seeds seeds = this.f.get();
+        if (seeds.a != n || seeds.b != n2) {
+            int n3 = 0;
+            for (int i = -1; i <= 1; ++i) {
+                for (int j = -1; j <= 1; ++j) {
+                    seeds.c[n3] = this.seedX(n + j, n2 + i);
+                    seeds.d[n3] = this.seedZ(n + j, n2 + i);
+                    ++n3;
+                }
+            }
+            seeds.a = n;
+            seeds.b = n2;
+        }
+        return seeds;
     }
 
     public double scale() {
@@ -34,16 +59,19 @@ public final class PlateLattice {
     public PlateKey plateAt(double d, double d2) {
         int n = (int)Math.floor(d / this.b);
         int n2 = (int)Math.floor(d2 / this.b);
+        Seeds seeds = this.seeds(n, n2);
         double d3 = Double.MAX_VALUE;
         int n3 = n;
         int n4 = n2;
+        int n7 = 0;
         for (int i = -1; i <= 1; ++i) {
             for (int j = -1; j <= 1; ++j) {
                 double d4;
                 int n5 = n + j;
                 int n6 = n2 + i;
-                double d5 = this.seedX(n5, n6) - d;
-                double d6 = d5 * d5 + (d4 = this.seedZ(n5, n6) - d2) * d4;
+                double d5 = seeds.c[n7] - d;
+                double d6 = d5 * d5 + (d4 = seeds.d[n7] - d2) * d4;
+                ++n7;
                 if (!(d6 < d3) && (d6 != d3 || n5 >= n3 && (n5 != n3 || n6 >= n4))) continue;
                 d3 = d6;
                 n3 = n5;
@@ -57,16 +85,19 @@ public final class PlateLattice {
         PlateKey plateKey;
         int n = (int)Math.floor(d / this.b);
         int n2 = (int)Math.floor(d2 / this.b);
+        Seeds seeds = this.seeds(n, n2);
         double d3 = Double.MAX_VALUE;
         double d4 = Double.MAX_VALUE;
         PlateKey plateKey2 = plateKey = new PlateKey(n, n2);
+        int n5 = 0;
         for (int i = -1; i <= 1; ++i) {
             for (int j = -1; j <= 1; ++j) {
                 double d5;
                 int n3 = n + j;
                 int n4 = n2 + i;
-                double d6 = this.seedX(n3, n4) - d;
-                double d7 = d6 * d6 + (d5 = this.seedZ(n3, n4) - d2) * d5;
+                double d6 = seeds.c[n5] - d;
+                double d7 = d6 * d6 + (d5 = seeds.d[n5] - d2) * d5;
+                ++n5;
                 if (d7 < d3) {
                     d4 = d3;
                     plateKey2 = plateKey;
@@ -85,13 +116,14 @@ public final class PlateLattice {
     public PlateKey[] platesWithin(double d, double d2, double d3) {
         int n = (int)Math.floor(d / this.b);
         int n2 = (int)Math.floor(d2 / this.b);
+        Seeds seeds = this.seeds(n, n2);
         double[] dArray = new double[9];
         double d4 = Double.MAX_VALUE;
         int n3 = 0;
         for (int i = -1; i <= 1; ++i) {
             for (int j = -1; j <= 1; ++j) {
-                double d5 = this.seedX(n + j, n2 + i) - d;
-                double d6 = this.seedZ(n + j, n2 + i) - d2;
+                double d5 = seeds.c[n3] - d;
+                double d6 = seeds.d[n3] - d2;
                 double d7 = Math.sqrt(d5 * d5 + d6 * d6);
                 dArray[n3++] = d7;
                 if (!(d7 < d4)) continue;
@@ -131,13 +163,16 @@ public final class PlateLattice {
     public double borderDistance(double d, double d2) {
         int n = (int)Math.floor(d / this.b);
         int n2 = (int)Math.floor(d2 / this.b);
+        Seeds seeds = this.seeds(n, n2);
         double d3 = Double.MAX_VALUE;
         double d4 = Double.MAX_VALUE;
+        int n3 = 0;
         for (int i = -1; i <= 1; ++i) {
             for (int j = -1; j <= 1; ++j) {
                 double d5;
-                double d6 = this.seedX(n + j, n2 + i) - d;
-                double d7 = Math.sqrt(d6 * d6 + (d5 = this.seedZ(n + j, n2 + i) - d2) * d5);
+                double d6 = seeds.c[n3] - d;
+                double d7 = Math.sqrt(d6 * d6 + (d5 = seeds.d[n3] - d2) * d5);
+                ++n3;
                 if (d7 < d3) {
                     d4 = d3;
                     d3 = d7;

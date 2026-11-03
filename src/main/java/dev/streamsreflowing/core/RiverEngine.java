@@ -54,7 +54,11 @@ public final class RiverEngine {
     private final double m;
     private final double n;
     private final ThreadLocal<long[]> o = ThreadLocal.withInitial(() -> new long[]{Long.MIN_VALUE, 0L});
-    private final ThreadLocal<Object[]> p = ThreadLocal.withInitial(this::a);
+    private final ThreadLocal<Object[]> p = ThreadLocal.withInitial(() -> {
+        Object[] objectArray = new Object[16];
+        this.s.add(objectArray);
+        return objectArray;
+    });
     private final ThreadLocal<Object[]> q = ThreadLocal.withInitial(this::a);
     private final ThreadLocal<double[]> r = ThreadLocal.withInitial(() -> new double[2]);
     private final Set<Object[]> s = Collections.newSetFromMap(new ConcurrentHashMap());
@@ -127,8 +131,7 @@ public final class RiverEngine {
 
     public void releaseThreadMemos() {
         for (Object[] objectArray : this.s) {
-            objectArray[0] = null;
-            objectArray[1] = null;
+            Arrays.fill(objectArray, null);
         }
         this.s.clear();
     }
@@ -177,12 +180,13 @@ public final class RiverEngine {
             return this.baseFor(plateKey);
         }
         Object[] objectArray = this.p.get();
-        if (plateKey.equals(objectArray[0])) {
-            return (RiverNetwork)objectArray[1];
+        int n = plateKey.hashCode() * 0x9E3779B1 >>> 29;
+        if (plateKey.equals(objectArray[n << 1])) {
+            return (RiverNetwork)objectArray[(n << 1) + 1];
         }
         RiverNetwork riverNetwork = this.k.get(plateKey, () -> NetworkTracer.connectNetwork(plateKey, this::baseFor, this.i, this.g, this.f, this.e), () -> NetworkTracer.connectNetwork(plateKey, this::baseFor, this.i, this.g, this.f, this.e));
-        objectArray[0] = plateKey;
-        objectArray[1] = riverNetwork;
+        objectArray[n << 1] = plateKey;
+        objectArray[(n << 1) + 1] = riverNetwork;
         return riverNetwork;
     }
 

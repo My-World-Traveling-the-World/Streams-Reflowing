@@ -6,7 +6,6 @@ package dev.streamsreflowing.core.river;
 import dev.streamsreflowing.core.river.RiverSample;
 import dev.streamsreflowing.core.river.RiverSegment;
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -39,9 +38,14 @@ public final class NearestRiverIndex {
     private final double[] w;
     private final int[] x;
     private final int y;
-    private final Map<Long, int[]> z;
+    private final int[] aa;
+    private final int[] ab;
+    private final int ac;
+    private final int ad;
+    private final int ae;
+    private final int af;
     private static final ThreadLocal<TieredCand[]> A = ThreadLocal.withInitial(() -> {
-        TieredCand[] tieredCandArray = new TieredCand[8];
+        TieredCand[] tieredCandArray = new TieredCand[64];
         for (int i = 0; i < tieredCandArray.length; ++i) {
             tieredCandArray[i] = new TieredCand();
         }
@@ -62,7 +66,35 @@ public final class NearestRiverIndex {
         this.f = list;
         this.y = Math.max(1, n);
         this.s = d2;
-        HashMap<Long, List> hashMap = new HashMap<Long, List>();
+        int n21 = Integer.MAX_VALUE;
+        int n22 = Integer.MAX_VALUE;
+        int n23 = Integer.MIN_VALUE;
+        int n24 = Integer.MIN_VALUE;
+        for (n4 = 0; n4 < list.size(); ++n4) {
+            RiverSegment riverSegment2 = list.get(n4);
+            int n5 = this.a(riverSegment2.minX() - d);
+            int n6 = this.a(riverSegment2.maxX() + d);
+            int n7 = this.b(riverSegment2.minZ() - d);
+            int n8 = this.b(riverSegment2.maxZ() + d);
+            if (n5 < n21) {
+                n21 = n5;
+            }
+            if (n6 > n23) {
+                n23 = n6;
+            }
+            if (n7 < n22) {
+                n22 = n7;
+            }
+            if (n8 > n24) {
+                n24 = n8;
+            }
+        }
+        int n25 = n23 < n21 ? 0 : (n23 - n21 + 1) * (n24 - n22 + 1);
+        this.ac = n25 == 0 ? 0 : n21;
+        this.ad = n25 == 0 ? 0 : n22;
+        this.ae = n25 == 0 ? 0 : n23 - n21 + 1;
+        this.af = n25 == 0 ? 0 : n24 - n22 + 1;
+        this.ab = new int[n25 + 1];
         for (n4 = 0; n4 < list.size(); ++n4) {
             RiverSegment riverSegment2 = list.get(n4);
             int n5 = this.a(riverSegment2.minX() - d);
@@ -70,12 +102,34 @@ public final class NearestRiverIndex {
             int n7 = this.b(riverSegment2.minZ() - d);
             int n8 = this.b(riverSegment2.maxZ() + d);
             for (int i = n5; i <= n6; ++i) {
+                int n9 = i - this.ac;
                 for (int j = n7; j <= n8; ++j) {
-                    hashMap.computeIfAbsent(NearestRiverIndex.a(i, j), l -> new ArrayList()).add(n4);
+                    int n10 = n9 + this.ae * (j - this.ad) + 1;
+                    this.ab[n10] = this.ab[n10] + 1;
                 }
             }
         }
-        this.z = new HashMap<Long, int[]>(hashMap.size() * 2);
+        for (int i = 1; i <= n25; ++i) {
+            this.ab[i] = this.ab[i] + this.ab[i - 1];
+        }
+        this.aa = new int[this.ab[n25]];
+        int[] nArray9 = new int[n25];
+        System.arraycopy(this.ab, 0, nArray9, 0, n25);
+        for (n4 = 0; n4 < list.size(); ++n4) {
+            RiverSegment riverSegment2 = list.get(n4);
+            int n5 = this.a(riverSegment2.minX() - d);
+            int n6 = this.a(riverSegment2.maxX() + d);
+            int n7 = this.b(riverSegment2.minZ() - d);
+            int n8 = this.b(riverSegment2.maxZ() + d);
+            for (int i = n5; i <= n6; ++i) {
+                int n9 = i - this.ac;
+                for (int j = n7; j <= n8; ++j) {
+                    int n10 = n9 + this.ae * (j - this.ad);
+                    this.aa[nArray9[n10]] = n4;
+                    nArray9[n10] = nArray9[n10] + 1;
+                }
+            }
+        }
         n4 = list.size();
         this.g = new double[n4];
         this.h = new double[n4];
@@ -107,14 +161,6 @@ public final class NearestRiverIndex {
             this.m[i] = Math.max(riverSegment3.x1(), riverSegment3.x2());
             this.n[i] = Math.min(riverSegment3.z1(), riverSegment3.z2());
             this.o[i] = Math.max(riverSegment3.z1(), riverSegment3.z2());
-        }
-        for (Map.Entry entry : hashMap.entrySet()) {
-            List list2 = (List)entry.getValue();
-            int[] nArray = new int[list2.size()];
-            for (int i = 0; i < nArray.length; ++i) {
-                nArray[i] = (Integer)list2.get(i);
-            }
-            this.z.put((Long)entry.getKey(), nArray);
         }
         this.t = new boolean[list.size()];
         this.v = new boolean[list.size()];
@@ -392,16 +438,22 @@ public final class NearestRiverIndex {
             int n9 = this.b(d2 - d3);
             int n10 = this.b(d2 + d3);
             for (int i = n7; i <= n8; ++i) {
+                int n16 = i - this.ac;
+                if (n16 < 0 || n16 >= this.ae) continue;
                 for (int j = n9; j <= n10; ++j) {
-                    int[] nArray3 = this.z.get(NearestRiverIndex.a(i, j));
-                    if (nArray3 == null) continue;
-                    if (n6 + nArray3.length + 1 > nArray2.length) {
-                        int[] nArray4 = Arrays.copyOf(nArray2, Math.max(nArray2.length * 2, n6 + nArray3.length + 1));
+                    int n17 = j - this.ad;
+                    if (n17 < 0 || n17 >= this.af) continue;
+                    int n18 = n16 + this.ae * n17;
+                    int n19 = this.ab[n18];
+                    int n20 = this.ab[n18 + 1];
+                    if (n19 == n20) continue;
+                    if (n6 + (n20 - n19) + 1 > nArray2.length) {
+                        int[] nArray4 = Arrays.copyOf(nArray2, Math.max(nArray2.length * 2, n6 + (n20 - n19) + 1));
                         nArray2 = nArray4;
                         NearestRiverIndex.D.get()[0] = nArray4;
                     }
-                    System.arraycopy(nArray3, 0, nArray2, n6, nArray3.length);
-                    n6 += nArray3.length;
+                    System.arraycopy(this.aa, n19, nArray2, n6, n20 - n19);
+                    n6 += n20 - n19;
                 }
             }
             if (n6 + 1 > nArray2.length) {
@@ -420,20 +472,29 @@ public final class NearestRiverIndex {
         int n14 = this.b(d5 + 16.0 + d3);
         int n15 = 0;
         for (int i = n11; i <= n12; ++i) {
+            int n16 = i - this.ac;
+            if (n16 < 0 || n16 >= this.ae) continue;
             for (n3 = n13; n3 <= n14; ++n3) {
-                int[] nArray6 = this.z.get(NearestRiverIndex.a(i, n3));
-                if (nArray6 == null) continue;
-                n15 += nArray6.length;
+                int n17 = n3 - this.ad;
+                if (n17 < 0 || n17 >= this.af) continue;
+                int n18 = n16 + this.ae * n17;
+                n15 += this.ab[n18 + 1] - this.ab[n18];
             }
         }
         int[] nArray7 = new int[n15];
         n3 = 0;
         for (n2 = n11; n2 <= n12; ++n2) {
+            int n16 = n2 - this.ac;
+            if (n16 < 0 || n16 >= this.ae) continue;
             for (n = n13; n <= n14; ++n) {
-                nArray = this.z.get(NearestRiverIndex.a(n2, n));
-                if (nArray == null) continue;
-                System.arraycopy(nArray, 0, nArray7, n3, nArray.length);
-                n3 += nArray.length;
+                int n17 = n - this.ad;
+                if (n17 < 0 || n17 >= this.af) continue;
+                int n18 = n16 + this.ae * n17;
+                int n19 = this.ab[n18];
+                int n20 = this.ab[n18 + 1];
+                if (n19 == n20) continue;
+                System.arraycopy(this.aa, n19, nArray7, n3, n20 - n19);
+                n3 += n20 - n19;
             }
         }
         Arrays.sort(nArray7);
@@ -446,7 +507,7 @@ public final class NearestRiverIndex {
         nArray8[n2] = -1;
         nArray = B.get();
         TieredCand tieredCand = tieredCandArray[nArray[0]];
-        nArray[0] = nArray[0] + 1 & 7;
+        nArray[0] = nArray[0] + 1 & 63;
         tieredCand.a = this;
         tieredCand.b = l2;
         tieredCand.c = d3;
@@ -463,10 +524,14 @@ public final class NearestRiverIndex {
         int n3 = this.b(d2);
         int n4 = this.b(d4);
         for (int i = n; i <= n2; ++i) {
+            int n6 = i - this.ac;
+            if (n6 < 0 || n6 >= this.ae) continue;
             for (int j = n3; j <= n4; ++j) {
-                int[] nArray = this.z.get(NearestRiverIndex.a(i, j));
-                if (nArray == null) continue;
-                for (int n5 : nArray) {
+                int n7 = j - this.ad;
+                if (n7 < 0 || n7 >= this.af) continue;
+                int n8 = n6 + this.ae * n7;
+                for (int n9 = this.ab[n8]; n9 < this.ab[n8 + 1]; ++n9) {
+                    int n5 = this.aa[n9];
                     double d7 = this.l[n5] > d3 ? this.l[n5] - d3 : (this.m[n5] < d ? d - this.m[n5] : 0.0);
                     double d8 = this.n[n5] > d4 ? this.n[n5] - d4 : (this.o[n5] < d2 ? d2 - this.o[n5] : 0.0);
                     if (!(d7 * d7 + d8 * d8 <= this.r[n5])) continue;
@@ -501,11 +566,15 @@ public final class NearestRiverIndex {
         int n7 = -1;
         double d5 = 0.0;
         for (int i = n3; i <= n4; ++i) {
+            int n16 = i - this.ac;
+            if (n16 < 0 || n16 >= this.ae) continue;
             for (int j = n5; j <= n6; ++j) {
-                int[] nArray = this.z.get(NearestRiverIndex.a(i, j));
-                if (nArray == null) continue;
+                int n17 = j - this.ad;
+                if (n17 < 0 || n17 >= this.af) continue;
+                int n18 = n16 + this.ae * n17;
                 double d6 = d4 < d3 ? d4 : d3;
-                for (int n8 : nArray) {
+                for (int n19 = this.ab[n18]; n19 < this.ab[n18 + 1]; ++n19) {
+                    int n8 = this.aa[n19];
                     double d7;
                     double d8;
                     double d9;
@@ -544,10 +613,14 @@ public final class NearestRiverIndex {
         int n6 = this.b(d2 + d3);
         double d7 = Double.NaN;
         for (int i = n3; i <= n4; ++i) {
+            int n8 = i - this.ac;
+            if (n8 < 0 || n8 >= this.ae) continue;
             for (int j = n5; j <= n6; ++j) {
-                int[] nArray = this.z.get(NearestRiverIndex.a(i, j));
-                if (nArray == null) continue;
-                for (int n7 : nArray) {
+                int n9 = j - this.ad;
+                if (n9 < 0 || n9 >= this.af) continue;
+                int n10 = n8 + this.ae * n9;
+                for (int n11 = this.ab[n10]; n11 < this.ab[n10 + 1]; ++n11) {
+                    int n7 = this.aa[n11];
                     double d8;
                     double d9;
                     RiverSegment riverSegment;
@@ -568,10 +641,14 @@ public final class NearestRiverIndex {
         int n3 = this.b(d2 - d3);
         int n4 = this.b(d2 + d3);
         for (int i = n; i <= n2; ++i) {
+            int n6 = i - this.ac;
+            if (n6 < 0 || n6 >= this.ae) continue;
             for (int j = n3; j <= n4; ++j) {
-                int[] nArray = this.z.get(NearestRiverIndex.a(i, j));
-                if (nArray == null) continue;
-                for (int n5 : nArray) {
+                int n7 = j - this.ad;
+                if (n7 < 0 || n7 >= this.af) continue;
+                int n8 = n6 + this.ae * n7;
+                for (int n9 = this.ab[n8]; n9 < this.ab[n8 + 1]; ++n9) {
+                    int n5 = this.aa[n9];
                     double d4;
                     RiverSegment riverSegment = this.f.get(n5);
                     if (!(riverSegment.distanceAt(d, d2, d4 = riverSegment.clampParam(d, d2)) <= riverSegment.widthAt(d4))) continue;
@@ -588,10 +665,6 @@ public final class NearestRiverIndex {
 
     private int b(double d) {
         return (int)Math.floor(d / (double)this.y);
-    }
-
-    private static long a(int n, int n2) {
-        return (long)n << 32 ^ (long)n2 & 0xFFFFFFFFL;
     }
 
     private static final class TieredCand {
