@@ -1,0 +1,26 @@
+# ─────────────────────────────────────────────────────────────────────
+# 本项目对字节精确性敏感：源码是 CFR/Vineflower 反编译产物，资源是原 jar 里
+# 抽出来的，任何行尾或编码的往返转换都会破坏"这一份就是部署的那一份"这个前提。
+#
+# `* -text` 关掉一切行尾与编码规范化：git 原样存盘上字节，checkout 也原样写回。
+# 没有这一行就没有"字节原样"，别信 git 的默认 eol 转换。
+# ─────────────────────────────────────────────────────────────────────
+* -text
+
+# 二进制（不要做 diff，不要做行尾处理）
+*.jar binary
+*.class binary
+*.zip binary
+*.ogg binary
+*.png binary
+*.bin binary
+*.mca binary
+*.nbt binary
+*.dat binary
+*.dll binary
+*.so binary
+*.dylib binary
+*.exe binary
+*.jfr binary
+*.hprof binary
+*.bundle binary

@@ -1,0 +1,43 @@
+{
+    "schemaVersion": 1,
+    "id": "streamsreflowing",
+    "version": "2.12.8",
+    "name": "StreamsReflowing",
+    "description": "Adds flowing streams, rivers and lakes to any terrain.",
+    "authors": [
+        "nicejohn"
+    ],
+    "license": "All Rights Reserved",
+    "icon": "streamsreflowing.png",
+    "environment": "*",
+    "entrypoints": {
+        "main": [
+            "dev.streamsreflowing.fabric.StreamsReflowingFabric"
+        ],
+        "client": [
+            "dev.streamsreflowing.fabric.client.StreamsReflowingFabricClient"
+        ],
+        "modmenu": [
+            "dev.streamsreflowing.fabric.client.StreamsModMenu"
+        ]
+    },
+    "mixins": [
+        "streamsreflowing.mixins.json"
+    ],
+    "accessWidener": "streamsreflowing.accesswidener",
+    "depends": {
+        "fabricloader": ">=0.16.9",
+        "fabric-api": "*",
+        "minecraft": "1.21.1",
+        "java": ">=21"
+    },
+    "suggests": {
+        "modmenu": "*"
+    },
+    "custom": {
+        "modmenu": {
+            "update_checker": true
+        }
+    }
+}
+  

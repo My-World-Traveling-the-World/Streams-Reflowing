@@ -1,0 +1,18 @@
+[
+  {"line": 1791, "old": "Object object;", "new": "RiverSegment object;"},
+  {"line": 1803, "old": "object = new HashSet();", "new": "Set<Integer> objectSet = new HashSet<Integer>();"},
+  {"line": 1817, "old": "object.add((Integer)entry.getKey());", "new": "objectSet.add((Integer)entry.getKey());"},
+  {"line": 1819, "old": "if (object.isEmpty()) {", "new": "if (objectSet.isEmpty()) {"},
+  {"line": 1824, "old": "if (object.contains(nArray[j])) continue;", "new": "if (objectSet.contains(nArray[j])) continue;"},
+  {"line": 1833, "old": "(Object)object.size()", "new": "(Object)objectSet.size()"},
+
+  {"line": 1839, "old": "Object object;", "new": "RiverSegment object;"},
+  {"line": 1866, "old": "object = new HashMap();", "new": "HashMap<Long, double[]> objectFloor = new HashMap<Long, double[]>();"},
+  {"line": 1871, "old": "(double[])object.get(", "new": "objectFloor.get("},
+  {"line": 1872, "old": "object.put(l, new double[]{dArray[n], nArray[n]});", "new": "objectFloor.put(l, new double[]{dArray[n], nArray[n]});"},
+  {"line": 1881, "old": "(double[])object.get(", "new": "objectFloor.get("},
+
+  {"line": 1921, "old": "Object object = new int[n];", "new": "int[] nArray5 = new int[n];"},
+  {"line": 1923, "old": "object[i] = NetworkTracer.a(nArray, i);", "new": "nArray5[i] = NetworkTracer.a(nArray, i);"},
+  {"line": 1925, "old": "return object;", "new": "return nArray5;"}
+]

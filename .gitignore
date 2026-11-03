@@ -1,0 +1,53 @@
+# ─────────────────────────────────────────────────────────────────────
+# streams-reflowing-src —— 从 StreamsReflowing 2.12.8 反编译恢复的源码工程
+#
+# 规则一律带作用域（开头 / 或写到具体子目录），**不要写裸的 `build`**：
+# 裸 `build` 会匹配任意层级叫 build 的目录，把 Java 包一起吞掉。
+# （本仓库当前没有 dev/streamsreflowing/**/build 包，但这条例外随时可能出现。）
+# ─────────────────────────────────────────────────────────────────────
+
+# Gradle 与构建产物
+/.gradle/
+/build/
+/run/
+/logs/
+*.class
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# 反编译恢复工作区：只留证据，其余全部排除
+#   libs/      第三方 jar（Sable 17+13 MB、named 19 MB、DH、sablebeyond…）
+#   tools/     cfr-0.152.jar 等工具
+#   snapshots/ 子代理批量改动前的整树快照（可用 git 历史替代）
+#   work/*.jar remap 后的原始 class jar（二进制，可重新生成）
+#   work/*.log 每轮编译日志（几十 MB）
+/recover-ignored/
+/_recover/libs/
+/_recover/tools/
+/_recover/snapshots/
+/_recover/work/*.jar
+/_recover/work/compile*.log
+/_recover/work/ntout/
+/_recover/work/origcls/
+/_recover/work/cp/
+/_recover/work/tmpout/
+/_recover/work/*args.txt
+# 注意：nt_errors.txt / nt_my_diff.diff 是取证证据，**故意保留提交**。
+
+# 构建 / 回归 / 取证日志（根目录散落）
+*.log
+*.log.*
+
+# IDE / 系统
+.idea/
+.vscode/
+*.iml
+*.swp
+.DS_Store
+Thumbs.db
+
+# 临时文件
+*.tmp
+*.bak
+*.orig
+*.rej

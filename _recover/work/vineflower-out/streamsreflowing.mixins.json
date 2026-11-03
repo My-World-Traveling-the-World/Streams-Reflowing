@@ -1,0 +1,35 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "dev.streamsreflowing.fabric.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "plugin": "dev.streamsreflowing.fabric.mixin.StreamsMixinPlugin",
+  "mixins": [
+    "BiomeMixin",
+    "BoatMixin",
+    "ChunkStatusGenerateMixin",
+    "ChunkStepMixin",
+    "SableBeyondWaterMixin",
+    "EntityFlowMixin",
+    "ItemEntityMixin",
+    "PaletteResizeLoopMixin",
+    "PlayerChunkSenderMixin",
+    "ConfiguredFeatureMixin",
+    "FlowingFluidMixin",
+    "StructureMixin",
+    "WorldCarverMixin",
+    "BiomeClimateAccessor",
+    "WaterFluidMixin",
+    "StreamBiomeSpawnsMixin"
+  ],
+  "client": [
+    "FrameHeartbeatMixin",
+    "LevelLoadingScreenMixin",
+    "WaterTintMixin",
+    "WorldRenderingSettingsMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "refmap": "streamsreflowing.refmap.json"
+}

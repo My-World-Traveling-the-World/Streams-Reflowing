@@ -1,0 +1,13 @@
+[
+  {"line": 3322, "old": "List<Object> list2;", "new": "List<Integer> list2;"},
+  {"line": 3344, "old": "for (int n82 : list3) {", "new": "for (int n152 : list3) {"},
+  {"line": 3345, "old": "lowResGrid.gi(n82)), lowResGrid.worldZ(lowResGrid.gj(n82))", "new": "lowResGrid.gi(n152)), lowResGrid.worldZ(lowResGrid.gj(n152))"},
+  {"line": 3367, "old": "list4 = new ArrayList<Object>(list2);", "new": "list4 = new ArrayList<Integer>(list2);"},
+  {"line": 3370, "old": "list2 = new ArrayList<Pt>(list);", "new": "List<Pt> listPts = new ArrayList<Pt>(list);"},
+  {"line": 3372, "old": "list2.add(new Pt(", "new": "listPts.add(new Pt("},
+  {"line": 3381, "old": "list2.add(new Pt(", "new": "listPts.add(new Pt("},
+  {"line": 3389, "old": "return d2 <= (double)(n2 - 4) ? NetworkTracer.b(list2, d, 8.0) : NetworkTracer.b(list2, d, Math.max(32.0, 3.0 * NetworkTracer.b(pt.acc(), streamsConfig)));", "new": "return d2 <= (double)(n2 - 4) ? NetworkTracer.b(listPts, d, 8.0) : NetworkTracer.b(listPts, d, Math.max(32.0, 3.0 * NetworkTracer.b(pt.acc(), streamsConfig)));"},
+  {"line": 3395, "old": "list2.add(new Pt(", "new": "listPts.add(new Pt("},
+  {"line": 3404, "old": "return NetworkTracer.b(list2, d, 8.0);", "new": "return NetworkTracer.b(listPts, d, 8.0);"},
+  {"line": 3412, "old": "return NetworkTracer.b(list2, d, Math.max(32.0, 3.0 * NetworkTracer.b(pt.acc(), streamsConfig)));", "new": "return NetworkTracer.b(listPts, d, Math.max(32.0, 3.0 * NetworkTracer.b(pt.acc(), streamsConfig)));"}
+]

@@ -1,0 +1,74 @@
+plugins {
+    id 'fabric-loom' version '1.16.3'
+}
+
+version = project.mod_version
+group = project.maven_group
+base { archivesName = project.archives_base_name }
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://maven.fabricmc.net/' }
+    maven { url = 'https://maven.terraformersmc.com/releases/' }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modCompileOnly "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+    modCompileOnly "com.terraformersmc:modmenu:11.0.4"
+    // OpenCL：GPU 精确采样层（原 plaincraft-streams-floating-structure-safety 补丁内嵌）。
+    // compileOnly 用于编译，include 让 loom 的 jarJar 把它打进 META-INF/jars —— 与原补丁一致。
+    compileOnly("org.lwjgl:lwjgl-opencl:3.3.3") { transitive = false }
+    include("org.lwjgl:lwjgl-opencl:3.3.3") { transitive = false }
+    // 可选兼容模组：只用于编译期解析，不进运行时。实例里没装，但保留兼容代码不删。
+    // 这三个 jar 已用 tiny-remapper 从 intermediary 预 remap 成 Mojang 官方名，
+    // 因此用普通 compileOnly（loom 不再检查其 mod 元数据/版本要求）。
+    compileOnly files('_recover/libs/named/DistantHorizonsApi-7.2.0.jar')
+    compileOnly files('_recover/libs/named/sable-fabric-1.21.1-2.0.6.jar')
+    compileOnly files('_recover/libs/named/sablebeyond-fabric-1.21.1-v0.5.0.jar')
+    // Sable 把 companion 数学库套在 META-INF/jars 里（sable-companion-fabric-1.21.1-1.6.0.jar），
+    // 单独抽出来 remap 后挂上；否则 companion.math.BoundingBox3i / Pose3d / SubLevelAccess 解析不到。
+    compileOnly files('_recover/libs/named/sable-companion-fabric-1.21.1-1.6.0.jar')
+}
+
+loom {
+    accessWidenerPath = file('src/main/resources/streamsreflowing.accesswidener')
+    // streamreflowing.mixins.json 里声明的是 "refmap": "streamsreflowing.refmap.json"，
+    // 但 loom 默认生成的是 <archivesBaseName>-refmap.json。名字对不上时 loom 不生成 refmap，
+    // 产物里就没有 mixin 重映射表 → 运行时 mixin 注入失败。这里把默认名对齐。
+    mixin {
+        defaultRefmapName = "streamsreflowing.refmap.json"
+    }
+}
+
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') { expand 'version': project.version }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 21
+    options.encoding = 'UTF-8'
+    options.compilerArgs << '-Xmaxerrs' << '5000'
+}
+
+// 源码树里同时带了 forge/ 与 neoforge/ 两个平台目录（各 2 个 mixin），
+// 那是多加载器工程里给另外两个平台的实现，不该在 Fabric 构建里编译。
+// fabric/core/worldgen 里没有任何地方引用它们（已核），因此直接排除。
+sourceSets {
+    main {
+        java {
+            exclude 'dev/streamsreflowing/forge/**'
+            exclude 'dev/streamsreflowing/neoforge/**'
+        }
+    }
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+test { failOnNoDiscoveredTests = false }

@@ -1,0 +1,40 @@
+总记录 974  去重后 443
+=== 消息类型 Top12（去重口径）===
+  185  找不到符号
+   64  需要数组, 但找到Object
+   17  需要模式或枚举常量
+   10  不兼容的类型: Object无法转换为int
+    7  二元运算符 '==' 的操作数类型错误
+    5  二元运算符 '<' 的操作数类型错误
+    5  类无法直接扩展 java.lang.Enum
+    4  二元运算符 '-' 的操作数类型错误
+    4  二元运算符 '|' 的操作数类型错误
+    3  无法取消引用void
+    3  一元运算符 '++' 的操作数类型Object错误
+    3  不兼容的类型: Iterator<Integer>无法转换为Iterator<Lake>
+=== 找不到符号 Top12 ===
+   44  hasNext()
+   44  next()
+   44  var105_246
+   40  size()
+   24  get(int)
+   20  var42_29
+   18  var44_30
+   18  length
+   12  var15_15
+   12  var4_16
+    8  var112_280
+    6  add(Object)
+=== 文件错误数（升序前12）===
+    1  StreamBiomeSpawnsMixin.java
+    1  BankStyleLoader.java
+    1  MobFlowOverrides.java
+    1  RegenPending.java
+    1  BankFeatureLoader.java
+    1  RTFBridge.java
+    1  QualityPreset.java
+    1  FileNetworkStore.java
+    2  BankStyle.java
+    2  FieldFormBuilder.java
+    2  FlowRemeshQueue.java
+    2  StreamVegetationFeature.java

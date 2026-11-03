@@ -1,0 +1,5 @@
+{
+  "biomes": ["still_life:wooded_prairie"],
+  "bed": "minecraft:clay", "waterline": "minecraft:gravel", "bank": "streamsreflowing:chameleon",
+  "underwater_noise": 0.2, "above_water_noise": 0.15
+}
