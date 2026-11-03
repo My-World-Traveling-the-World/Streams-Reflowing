@@ -162,3 +162,71 @@ return 海洋 ? -1000 : 真值.height(x,z);                // 否则回落 vanil
   + `remove`**，发生在紧急 chunk demand 的提交路径上。
 - **`FormSampler:22` 用 `ConcurrentHashMap<Thread, Work>` 当 ThreadLocal**（同文件 25-26 行
   已经在用 `LongAdder`，说明作者知道正确写法）。
+
+---
+
+## 8. 实施阶段的修正（2026-11-04，S3 子代理实测反馈）
+
+以下是**分析结论被实施时证伪**的三条。记在这里，免得以后有人照着错方案重做。
+
+### 8.1 ❌ A02「删掉二分前的顶端探测」—— 已证伪，不要做
+
+`StreamsWorldgen` 原第 171-174 行：
+```java
+if (densityFunction.compute(new SinglePointContext(n, maxY, n2)) > 0.390625) return maxY + 1;
+```
+
+**只在「该列从 minY 到 maxY 单调（下实上空）」时删掉才等价。**
+反例：`minY=-64, maxY=320`，第一次 `mid = (-64+320)>>>1 = 128`；只要该列 128 处是空气
+（洞穴 / 悬垂 / 浮岛 / 3D 噪声的 slide/squeeze），`hi` 立刻降到 128，二分收敛到**真实地表 p**
+并返回 `p+1`；而原实现返回 `321`（`maxY+1`）。**差一个世界高度。**
+
+而 `finalDensity` 是 3D 噪声 + slide/squeeze，单调性不可证 —— 而且 `b()` 阶梯兜底
+的存在本身就说明作者预期非单调列。**⇒ 保留原行。**
+
+### 8.2 ❌ A11「用 `floor((d-8)/16)` 直接索引 BandCorrection」—— 公式会取错带
+
+建表处虽然 `center = 带起点 + 8`，但 `centers` 是**稀疏**的：只保留样本 ≥6 的带，
+带与带之间可以有 32 / 48 的空档。连续 16 的公式会落到错误的带上。
+
+**正确做法：对 `centers` 做 lower_bound 二分**（找第一个 `centers[i] >= d` 的下标），
+在前置守卫（`d > centers[0]` 且 `d < centers[len-1]`）下落点唯一，
+与原线性扫描的 `n` 恒等，后续 lerp 一字未动 → 逐位等价。
+
+### 8.3 ❌ A04「按 `(floor(x/b), floor(z/b))` 记忆化 9 个 seed 距离」—— 前提错了
+
+`d7 = sqrt((seedX-d)^2 + (seedZ-d2)^2)` 含**连续的 d/d2**，按板块格记忆化整份结果
+会改变结果。
+
+**正确做法：只缓存真正只依赖整数索引的那个量 —— 9 个 `seedX/seedZ` 原值**
+（`(n+j, n2+i)` 的纯函数，含实例的 seed/scale/jitter）。命中即 0 次 `Hashing.unit`
+（原每次调用 18 次）；`-d`、`-d2`、sqrt、比较、数组大小、遍历顺序、平局规则全部不动
+→ 逐位等价。四个 9 邻域方法（`platesWithin` / `plateAt` / `nearestTwo` / `borderDistance`）
+共用，因为是同一份收益来源。
+
+**线程安全：必须每实例 `ThreadLocal`**（`PlateLattice` 全仓只有 `RiverEngine:145` 一处 new，
+但 sampler 线程池会并发读写，普通字段会串数据）。
+
+### 8.4 ⏭ A06「融合两次 9 邻域扫描」—— 跨文件 + 很可能更慢
+
+1. `PlateDomain` 的 `a`（PlateLattice）与 `b`（PlateKey）都是 `private final`，且不在
+   `LowResGrid` 的范围内 ⇒ 融合必须再改一个文件（加一个委托方法）。
+2. **更要紧：现状是短路**
+   `plateDomain.contains(x,z) && plateDomain.borderDistance(x,z) >= margin`。
+   MAX 档约 75% 的列在 `contains` 就 false，`borderDistance` 的 9 次 `Math.sqrt` 根本不算。
+   融合成「一次扫描同时给 winner + 最近/次近」会让这 75% 的列**白付 9 次 sqrt**。
+3. 这部分收益 **已由 A04 的 seed 缓存以等价方式拿到**（`contains` 与随后的
+   `borderDistance` 共享同一次 9 邻域 seed 计算）。
+
+### 8.5 ⏭ A40「LowResGrid 双线性内插循环展开」—— 没有循环可展开
+
+367-378 是两条直线双线性内插（各 4 次数组读 + 3 次乘加）。唯一"安全"改写是把
+`Math.floorDiv(n,n3)` 换成除法（负数坐标不等价）或把 `/(double)n3` 换成乘倒数
+（浮点舍入不同）—— 都不满足逐位等价。
+
+### 8.6 ✅ A09 的一处必要偏离
+
+`openAt` 里的 sampler 会被 `LowResGrid` 的 `streamsreflowing-sampler` 线程池**并发调用**，
+用普通实例字段是数据竞争（会真的算错）⇒ 该处用 `ThreadLocal<MutableCtx>`。
+主路径 `a()` / `b()` 仍是「每列建 1 个」，严格按原方案。
+（旁证：MC 自己的 `ContextProvider` 就是复用可变 context，说明 `compute` 不保留引用。）
