@@ -394,7 +394,10 @@ public final class LowResGrid {
             rowBand.run(0, n);
             return;
         }
-        int n3 = Math.min(c, n);
+        // 切分粒度跟随「当前 sampler 池的实际宽度」，不能写死硬件核数常量 c（= cores - 2）。
+        // 预热结束后池宽常被压到 1~2，此时若仍切 min(c, n) 份，就是 N 份工作串行挤 1~2 个
+        // 线程，白付队列与闩锁开销。上限仍用 c（满宽），下限 1，再按行数 n 收口。
+        int n3 = Math.min(c, Math.min(Math.max(1, LowResGrid.samplerWidth()), n));
         if (n3 <= 1) {
             rowBand.run(0, n);
             return;
