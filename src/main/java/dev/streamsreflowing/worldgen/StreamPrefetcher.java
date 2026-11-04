@@ -4,6 +4,7 @@
 package dev.streamsreflowing.worldgen;
 
 import dev.streamsreflowing.Constants;
+import dev.streamsreflowing.compat.streamscontrol.StreamsStartupProgress;
 import dev.streamsreflowing.core.RiverEngine;
 import dev.streamsreflowing.core.cache.PlateRiverCache;
 import dev.streamsreflowing.core.compose.ColumnPlan;
@@ -298,6 +299,20 @@ public final class StreamPrefetcher {
 
     private static void a(int n) {
         int n2;
+        // 预热期让路：启动预热期间（StreamsStartupProgress.begin(...) 到 finish()/clear() 之间）
+        // 把 prefetch 当作最低活动等级 0 处理，池宽落到 1，CPU 全让给预热。finish() 会把
+        // ACTIVE 置 false，下一次 tick 自然回到下面原有的分级逻辑，不需要单独恢复路径；
+        // 停机路径 onServerStopping() 仍会显式 setBackgroundThrottle(4)。
+        //
+        // 只压 prefetch 池：方法末尾透传给 LowResGrid.setBackgroundThrottle 的仍是原始活动
+        // 等级 n3。sampler 池正是预热自己的地形采样依赖（prewarm build -> RiverEngine
+        // .networkFor -> NetworkTracer -> LowResGrid.parallelFor），预热期把它压到 1 会让
+        // band 退化成 n3 <= 1 的内联串行分支，反而拖慢预热，与让路目的相反。
+        int n3 = n;
+        boolean bl = StreamsStartupProgress.isActive();
+        if (bl) {
+            n = 0;
+        }
         if (n >= 4) {
             n2 = a;
         } else if (n == 3) {
@@ -310,6 +325,10 @@ public final class StreamPrefetcher {
         if (i) {
             n2 = Math.max(n2, Math.min(3, f.get()));
         }
+        if (bl) {
+            // 上面紧急通道的下限可能把 n2 抬到 2~3；预热期一律压平到最小宽度 1。
+            n2 = 1;
+        }
         if (b.getCorePoolSize() != n2 || b.getMaximumPoolSize() != n2) {
             if (n2 >= b.getMaximumPoolSize()) {
                 b.setMaximumPoolSize(n2);
@@ -319,7 +338,7 @@ public final class StreamPrefetcher {
                 b.setMaximumPoolSize(n2);
             }
         }
-        LowResGrid.setBackgroundThrottle(n);
+        LowResGrid.setBackgroundThrottle(n3);
     }
 
     public static void clearPending() {
