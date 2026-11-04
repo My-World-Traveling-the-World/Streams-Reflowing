@@ -282,7 +282,13 @@ public final class NetworkTracer {
         }
         double[] dArray = new double[n30];
         boolean[] blArray2 = new boolean[n30];
-        PriorityQueue<Integer> priorityQueue = new PriorityQueue<Integer>((n, n2) -> Double.compare(dArray[n], dArray[n2]));
+        // pflood 优先队列：默认用原语 DoubleMinHeap（去 Integer 装箱 + 去 lambda 分配，
+        // 逐位等价，见 commit message 的等价性论证）。-Dstreamsreflowing.doubleminheap=false
+        // 可回退到原 PriorityQueue<Integer> 路径。
+        boolean useDoubleMinHeap = Boolean.parseBoolean(System.getProperty("streamsreflowing.doubleminheap", "true"));
+        PriorityQueue<Integer> priorityQueue = useDoubleMinHeap ? null
+                : new PriorityQueue<Integer>((n, n2) -> Double.compare(dArray[n], dArray[n2]));
+        DoubleMinHeap doubleMinHeap = useDoubleMinHeap ? new DoubleMinHeap() : null;
         boolean[] blArray3 = new boolean[n30];
         ArrayList<Integer> arrayList2 = new ArrayList<Integer>();
         Iterator<Integer> iteratorCell = arrayList.iterator();
@@ -319,15 +325,16 @@ public final class NetworkTracer {
             if (lowResGrid.riverOutlet(n37)) {
                 blArray2[n37] = true;
                 if (!blArray3[n37]) continue;
-                priorityQueue.add(n37);
+                if (useDoubleMinHeap) doubleMinHeap.add(dArray[n37], n37); else priorityQueue.add(n37);
                 continue;
             }
             if (!(lowResGrid.height(n37) <= (double)n31) && !NetworkTracer.a(lowResGrid, n37)) continue;
             blArray2[n37] = true;
-            priorityQueue.add(n37);
+            if (useDoubleMinHeap) doubleMinHeap.add(dArray[n37], n37); else priorityQueue.add(n37);
         }
-        while (!priorityQueue.isEmpty()) {
-            int n38 = (Integer)priorityQueue.poll();
+        while (useDoubleMinHeap ? !doubleMinHeap.isEmpty() : !priorityQueue.isEmpty()) {
+            int n38 = useDoubleMinHeap ? doubleMinHeap.value() : (Integer)priorityQueue.poll();
+            if (useDoubleMinHeap) doubleMinHeap.pop();
             int n39 = lowResGrid.gi(n38);
             n24 = lowResGrid.gj(n38);
             for (n23 = 0; n23 < 8; ++n23) {
@@ -337,7 +344,7 @@ public final class NetworkTracer {
                 if (!lowResGrid.valid(n22, n21) || !lowResGrid.inDomain(n40 = lowResGrid.idx(n22, n21)) || blArray2[n40]) continue;
                 dArray[n40] = Math.max(lowResGrid.height(n40), dArray[n38] + 0.001);
                 blArray2[n40] = true;
-                priorityQueue.add(n40);
+                if (useDoubleMinHeap) doubleMinHeap.add(dArray[n40], n40); else priorityQueue.add(n40);
             }
         }
         long l5 = System.nanoTime();
