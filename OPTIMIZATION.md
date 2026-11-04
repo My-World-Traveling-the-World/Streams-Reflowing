@@ -230,3 +230,54 @@ if (densityFunction.compute(new SinglePointContext(n, maxY, n2)) > 0.390625) ret
 用普通实例字段是数据竞争（会真的算错）⇒ 该处用 `ThreadLocal<MutableCtx>`。
 主路径 `a()` / `b()` 仍是「每列建 1 个」，严格按原方案。
 （旁证：MC 自己的 `ContextProvider` 就是复用可变 context，说明 `compute` 不保留引用。）
+
+---
+
+## 9. 已落地（第二轮，2026-11-04 晚）—— 高海拔列在花钱之前丢弃
+
+**commit `e05ec11`（在 `7bf5e88` 的 40+ 处之后又一条）**
+
+### 问题
+
+`maxRiverPlanY`（默认 140）以上不出河流，但门槛原来只挂在
+`plan` / `planLean` / `altPlan` 的 `@At("RETURN")` 上 —— 完整 `ColumnPlan` 算完才换成 `NONE`。
+白算的是 `RiverEngine.a(double,double,RiverSample,boolean)` 里最贵的两段：
+河床 `inset` 解算（内部调 `lakeAt`）与河方向解算。
+
+### 做法与等价性
+
+三条入口全部漏斗到同一个私有工人方法 `a(DDL...;Z)`，在它的 `@At("HEAD")` 注入即可全罩住。
+
+判据用**与门槛完全相同的公式**算水面高度下界：
+
+```
+waterSurfaceY = max(seaLevel-1, floor(gradeY) - insetFor(width, cfg))
+             >= floor(gradeY) - insetFor(width, cfg)          // max 只会抬高
+```
+
+因此 `floor(gradeY) - insetFor(width,cfg) > ceiling ⇒ waterSurfaceY > ceiling`
+⇒ RETURN 处的门槛本来就会拒绝 ⇒ 提前返回 `NONE` **逐位等价**，只是省掉后面的计算。
+
+`gradeY` 来自河段坡度剖面（流向网络早已算好），**不触发任何地形采样** —— 这正是它能
+放在采样/解算之前的根本原因。
+
+### 与第 4 节「明确不做」的区别
+
+第 4 节否决的是**在 `LowResGrid` 里给高度封顶**（高度同时当绝对高程和差分坡度用，
+封顶会让 200 格高原列与 130 格邻列坡度失真 → 流向改变）。本条**不改任何高度值**，
+只在「已经确定要拒绝」时提前退出，所以不触碰坡度语义。
+
+### 验证与测量
+
+```
+compileJava 0 错误 / build 0 错误
+字节码：plaincraft$gateBeforePlanWork(DDLRiverSample;ZLCallbackInfoReturnable;)V 存在，
+        引用 RiverEngine.insetFor(DLStreamsConfig;)I 与 StreamsPrewarmConfig.maxRiverPlanY()I
+产物：streamsreflowing-2.12.8-decompiled.jar 3,269,230 B（+853 B，即新增方法）
+部署：StreamsReflowing-1.21.1-fabric-2.12.8-heightgate.jar，SHA 525c515e097fb4a4
+真机：未验
+```
+
+**测量开关**：`-Dplaincraft.streams.heightGateDiag=true`
+每 4096 次早退打一行 `[SR-HEIGHTGATE] early exits so far: N`，
+一次世界生成就能看出高海拔河流占多少列。
