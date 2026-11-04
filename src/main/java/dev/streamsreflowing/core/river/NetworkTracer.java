@@ -2596,7 +2596,11 @@ public final class NetworkTracer {
         boolean[] blArray5 = new boolean[n13 * n12];
         int n31 = n17 / 3 + 5;
         boolean[] blArray6 = blArray5;
-        AbstractCollection abstractCollection = new ArrayDeque();
+        AbstractCollection abstractCollection = null;
+        AbstractCollection abstractCollection2 = null;
+        int[] bfsQueue = new int[128];
+        int bfsHead = 0;
+        int bfsTail = 0;
         Iterator<Integer> iteratorBase = list.iterator();
         while (iteratorBase.hasNext()) {
             int n32 = iteratorBase.next();
@@ -2605,28 +2609,35 @@ public final class NetworkTracer {
             n10 = (lowResGrid.worldZ(lowResGrid.gj(n32)) - n142) / 3;
             if (n11 < 0 || n11 >= n13 || n10 < 0 || n10 >= n12 || blArray6[n10 * n13 + n11] != false) continue;
             blArray6[n10 * n13 + n11] = true;
-            ((ArrayDeque)abstractCollection).add(new int[]{n11, n10, 0});
+            if (bfsTail == bfsQueue.length) bfsQueue = Arrays.copyOf(bfsQueue, bfsQueue.length * 2);
+            bfsQueue[bfsTail++] = (n11 << 14) | (n10 << 4);
         }
-        AbstractCollection abstractCollection2 = new ArrayList();
-        while (!((ArrayDeque)abstractCollection).isEmpty()) {
-            int[] nArray = (int[])((ArrayDeque)abstractCollection).poll();
-            abstractCollection2.add(nArray);
-            if (nArray[2] >= n31) continue;
+        int[] bfsCollected = new int[Math.max(16, bfsTail)];
+        int bfsCount = 0;
+        while (bfsHead < bfsTail) {
+            int packed = bfsQueue[bfsHead++];
+            int px = packed >>> 14;
+            int pz = (packed >>> 4) & 1023;
+            int pd = packed & 15;
+            if (bfsCount == bfsCollected.length) bfsCollected = Arrays.copyOf(bfsCollected, bfsCollected.length * 2);
+            bfsCollected[bfsCount++] = packed;
+            if (pd >= n31) continue;
             for (n11 = -1; n11 <= 1; ++n11) {
                 for (n10 = -1; n10 <= 1; ++n10) {
-                    n9 = nArray[0] + n10;
-                    n8 = nArray[1] + n11;
+                    n9 = px + n10;
+                    n8 = pz + n11;
                     if (n10 == 0 && n11 == 0 || n9 < 0 || n9 >= n13 || n8 < 0 || n8 >= n12 || blArray6[n8 * n13 + n9] != false) continue;
                     blArray6[n8 * n13 + n9] = true;
-                    ((ArrayDeque)abstractCollection).add(new int[]{n9, n8, nArray[2] + 1});
+                    if (bfsTail == bfsQueue.length) bfsQueue = Arrays.copyOf(bfsQueue, bfsQueue.length * 2);
+                    bfsQueue[bfsTail++] = (n9 << 14) | (n8 << 4) | ((pd + 1) & 15);
                 }
             }
         }
-        ArrayList<int[]> arrayList4 = (ArrayList<int[]>)abstractCollection2;
         long l2 = System.nanoTime();
-        LowResGrid.parallelFor(arrayList4.size(), n3 -> {
-            int[] nArray = (int[])arrayList4.get(n3);
-            terrainSampler.groundHeight(n22 + nArray[0] * 3, n142 + nArray[1] * 3);
+        final int[] arrayList4 = bfsCollected;
+        LowResGrid.parallelFor(bfsCount, n3 -> {
+            int packed = arrayList4[n3];
+            terrainSampler.groundHeight(n22 + (packed >>> 14) * 3, n142 + ((packed >>> 4) & 1023) * 3);
         });
         long[] lArray3 = X.get();
         lArray3[7] = lArray3[7] + (System.nanoTime() - l2);
@@ -2645,7 +2656,8 @@ public final class NetworkTracer {
             int n38;
             int n39;
             int n40;
-            ArrayList<int[]> arrayListWork = new ArrayList<int[]>();
+            long[] arrayListWork = new long[128];
+            int workCount = 0;
             Iterator iterator = abstractCollection.iterator();
             while (iterator.hasNext()) {
                 n10 = (Integer)iterator.next();
@@ -2659,23 +2671,25 @@ public final class NetworkTracer {
                     n39 = n142 + n5 * 3;
                     if (blArray5[n5 * n13 + n6] == false) {
                         blArray5[n5 * n13 + n6] = true;
-                        arrayListWork.add(new int[]{n40, n39});
+                        if (workCount == arrayListWork.length) arrayListWork = Arrays.copyOf(arrayListWork, arrayListWork.length * 2);
+                        arrayListWork[workCount++] = ((long)n40 << 32) | ((long)n39 & 0xFFFFFFFFL);
                     }
                     n38 = n22 + n41 * 3;
                     n37 = n142 + n8 * 3;
                     n36 = Integer.signum(n40 - n38);
                     n35 = Integer.signum(n39 - n37);
                     for (n34 = 1; n34 < 3; ++n34) {
-                        arrayListWork.add(new int[]{n38 + n36 * n34, n37 + n35 * n34});
+                        if (workCount == arrayListWork.length) arrayListWork = Arrays.copyOf(arrayListWork, arrayListWork.length * 2);
+                        arrayListWork[workCount++] = ((long)(n38 + n36 * n34) << 32) | ((long)(n37 + n35 * n34) & 0xFFFFFFFFL);
                     }
                 }
             }
-            if (!arrayListWork.isEmpty()) {
+            if (workCount > 0) {
                 long l3 = System.nanoTime();
-                ArrayList<int[]> arrayList5 = arrayListWork;
-                LowResGrid.parallelFor(arrayList5.size(), n -> {
-                    int[] nArray = (int[])arrayList5.get(n);
-                    terrainSampler.groundHeight(nArray[0], nArray[1]);
+                final long[] arrayList5 = arrayListWork;
+                LowResGrid.parallelFor(workCount, n -> {
+                    long packed = arrayList5[n];
+                    terrainSampler.groundHeight((int)(packed >> 32), (int)packed);
                 });
                 long[] lArray4 = X.get();
                 lArray4[7] = lArray4[7] + (System.nanoTime() - l3);
