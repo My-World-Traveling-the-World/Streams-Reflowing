@@ -49,12 +49,20 @@ public final class LowResGrid {
         LowResGrid.a(n >= 4 ? c : (n == 3 ? Math.max(2, c * 3 / 4) : (n == 2 ? Math.max(2, c / 3) : (n == 1 ? Math.max(2, c / 5) : 1))));
     }
 
-    public static void noteUrgentWaiter() {
+    /**
+     * 登记一个「紧急等待者」：调用方即将阻塞等待某个 plate，这段时间 sampler 池可按满宽跑。
+     *
+     * <p>返回本次是否真的计了数。prefetch 线程不计数（它自己就是被让路的对象），因此
+     * 调用方必须据此决定 finally 里要不要调 {@link #urgentWaiterDone()}。否则计数器会单向
+     * 漂负，{@code g > 0} 恒假，依赖它的让路逻辑与配额快路径会静默失效。
+     */
+    public static boolean noteUrgentWaiter() {
         if (Thread.currentThread().getName().startsWith("streamsreflowing-prefetch")) {
-            return;
+            return false;
         }
         g.incrementAndGet();
         LowResGrid.a(c);
+        return true;
     }
 
     public static void urgentWaiterDone() {

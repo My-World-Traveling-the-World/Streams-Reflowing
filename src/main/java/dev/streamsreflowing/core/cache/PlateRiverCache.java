@@ -95,7 +95,8 @@ public final class PlateRiverCache {
             return completableFuture.join();
         }
         boolean bl = PlateRiverCache.a(Thread.currentThread().getName());
-        LowResGrid.noteUrgentWaiter();
+        // 只有 noteUrgentWaiter() 真的计了数，finally 才允许扣回来；prefetch 线程不计。
+        boolean bl2 = LowResGrid.noteUrgentWaiter();
         try {
             if (bl || supplier == null) {
                 RiverNetwork riverNetwork = completableFuture.join();
@@ -105,21 +106,23 @@ public final class PlateRiverCache {
             return riverNetwork;
         }
         catch (TimeoutException timeoutException) {
+            // 计数统一由 finally 归还；旧代码在这里和 finally 各扣一次，等于双扣。
             RiverNetwork riverNetwork = supplier.get();
-            LowResGrid.urgentWaiterDone();
             return riverNetwork;
         }
         catch (InterruptedException interruptedException) {
+            // 同上：只在 finally 归还一次。
             Thread.currentThread().interrupt();
             RiverNetwork riverNetwork = supplier.get();
-            LowResGrid.urgentWaiterDone();
             return riverNetwork;
         }
         catch (ExecutionException executionException) {
             throw new CompletionException(executionException.getCause());
         }
         finally {
-            LowResGrid.urgentWaiterDone();
+            if (bl2) {
+                LowResGrid.urgentWaiterDone();
+            }
         }
     }
 
