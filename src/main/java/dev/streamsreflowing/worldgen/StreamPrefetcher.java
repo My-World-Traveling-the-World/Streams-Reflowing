@@ -96,15 +96,21 @@ public final class StreamPrefetcher {
     private static final int x = 12;
     private static final int y = 8;
     private static final double z = 25.0;
-    private static final Map<UUID, ArrayDeque<double[]>> A = new HashMap<UUID, ArrayDeque<double[]>>();
+    // 0.7.118(streams)：原来是 HashMap + 非 volatile 的 long/int。
+    // A 被四处并发改写（isEmpty / keySet().retainAll / clear / computeIfAbsent），
+    // 分别发生在 server tick、prefetch 池与 urgent 线程上 ⇒ HashMap 并发写会丢更新甚至死循环。
+    // H / I 是跨线程读写的计数与时间戳，非 volatile 意味着读者可能长期看不到新值
+    // （:155 的 ++I 节奏判断、:279 的 H 计时都会因此失真）。
+    // 语义不变：只是把容器换成并发安全的、把两个标量补上可见性。
+    private static final Map<UUID, ArrayDeque<double[]>> A = new ConcurrentHashMap<UUID, ArrayDeque<double[]>>();
     private static final int B = 400;
     private static final int C = 160;
     private static final double D = 24.0;
     private static final double E = 1600.0;
     private static final double F = 1.25;
     private static final double G = 1.6;
-    private static long H;
-    private static int I;
+    private static volatile long H;
+    private static volatile int I;
     private static final boolean J;
     private static final double K = 42.0;
     private static volatile boolean L;

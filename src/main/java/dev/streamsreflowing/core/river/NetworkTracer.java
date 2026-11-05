@@ -2605,7 +2605,13 @@ public final class NetworkTracer {
         boolean[] blArray6 = blArray5;
         AbstractCollection abstractCollection = null;
         AbstractCollection abstractCollection2 = null;
-        int[] bfsQueue = new int[128];
+        // 队列改用 long 打包（原来是 int：(gx << 14) | (gz << 4) | depth）。
+        // int 版本里 gz 只有 10 位（掩码 1023）、深度只有 4 位（& 15）：
+        //   · 窗口 z 跨度超过 1024 个 3 格单元（>3072 格）时 gz 会溢进 gx 位，静默变成另一个格子；
+        //   · 深度上限 n31 超过 15 时 (pd+1) & 15 回绕到 0，BFS 会重复入队/绕圈。
+        // 两者都不打日志、只表现为"采样结果不对"。long 打包给 gx/gz 各 24 位、depth 16 位，
+        // 位宽不可能撞；入队顺序与格子集合与 int 版完全一致 ⇒ 等价改造。
+        long[] bfsQueue = new long[128];
         int bfsHead = 0;
         int bfsTail = 0;
         Iterator<Integer> iteratorBase = list.iterator();
@@ -2617,15 +2623,15 @@ public final class NetworkTracer {
             if (n11 < 0 || n11 >= n13 || n10 < 0 || n10 >= n12 || blArray6[n10 * n13 + n11] != false) continue;
             blArray6[n10 * n13 + n11] = true;
             if (bfsTail == bfsQueue.length) bfsQueue = Arrays.copyOf(bfsQueue, bfsQueue.length * 2);
-            bfsQueue[bfsTail++] = (n11 << 14) | (n10 << 4);
+            bfsQueue[bfsTail++] = ((long) n11 << 40) | ((long) n10 << 16);
         }
-        int[] bfsCollected = new int[Math.max(16, bfsTail)];
+        long[] bfsCollected = new long[Math.max(16, bfsTail)];
         int bfsCount = 0;
         while (bfsHead < bfsTail) {
-            int packed = bfsQueue[bfsHead++];
-            int px = packed >>> 14;
-            int pz = (packed >>> 4) & 1023;
-            int pd = packed & 15;
+            long packed = bfsQueue[bfsHead++];
+            int px = (int) (packed >>> 40);
+            int pz = (int) ((packed >>> 16) & 0xFFFFFFL);
+            int pd = (int) (packed & 0xFFFFL);
             if (bfsCount == bfsCollected.length) bfsCollected = Arrays.copyOf(bfsCollected, bfsCollected.length * 2);
             bfsCollected[bfsCount++] = packed;
             if (pd >= n31) continue;
@@ -2636,15 +2642,17 @@ public final class NetworkTracer {
                     if (n10 == 0 && n11 == 0 || n9 < 0 || n9 >= n13 || n8 < 0 || n8 >= n12 || blArray6[n8 * n13 + n9] != false) continue;
                     blArray6[n8 * n13 + n9] = true;
                     if (bfsTail == bfsQueue.length) bfsQueue = Arrays.copyOf(bfsQueue, bfsQueue.length * 2);
-                    bfsQueue[bfsTail++] = (n9 << 14) | (n8 << 4) | ((pd + 1) & 15);
+                    bfsQueue[bfsTail++] = ((long) n9 << 40) | ((long) n8 << 16)
+                            | (((long) (pd + 1)) & 0xFFFFL);
                 }
             }
         }
         long l2 = System.nanoTime();
-        final int[] arrayList4 = bfsCollected;
+        final long[] arrayList4 = bfsCollected;
         LowResGrid.parallelFor(bfsCount, n3 -> {
-            int packed = arrayList4[n3];
-            terrainSampler.groundHeight(n22 + (packed >>> 14) * 3, n142 + ((packed >>> 4) & 1023) * 3);
+            long packed = arrayList4[n3];
+            terrainSampler.groundHeight(n22 + (int) (packed >>> 40) * 3,
+                    n142 + (int) ((packed >>> 16) & 0xFFFFFFL) * 3);
         });
         long[] lArray3 = X.get();
         lArray3[7] = lArray3[7] + (System.nanoTime() - l2);
