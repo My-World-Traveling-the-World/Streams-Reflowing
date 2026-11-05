@@ -115,6 +115,16 @@ public final class StreamPrefetcher {
     private static final int[] Q;
     private static final int[] R;
     private static final AtomicBoolean S;
+    // 预热期是否允许拦掉 prefetch 建板。-Dstreamsreflowing.prewarmPrefetch=false 回退到现行为。
+    // prefetch 线程优先级是 1、预热 owner 是 0；低优先级 prefetch 一旦先 putIfAbsent 成为 builder，
+    // 高优先级 owner 会在 PlateRiverCache.join() 上等它（真机实测一块板 233s）。预热期玩家还没进
+    // 世界，prefetch 停摆无感知代价；owner 建板是独立调用路径（RiverEngine.networkFor -> 同一个
+    // PlateRiverCache.get，谁先 putIfAbsent 谁建），所以跳过不会让任何板永远缺失。
+    private static final boolean PREWARM_PREFETCH_ALLOWED =
+            Boolean.parseBoolean(System.getProperty("streamsreflowing.prewarmPrefetch", "true"));
+    // laneDiag 定时输出开关；-Dstreamsreflowing.laneDiag=true 时每 20s 打一行，观察 urgentWaiters。
+    private static final boolean LANE_DIAG = Boolean.getBoolean("streamsreflowing.laneDiag");
+    private static volatile long lastLaneDiagMs;
 
     private static void a() {
         int n = b.getMaximumPoolSize();
@@ -135,6 +145,13 @@ public final class StreamPrefetcher {
         Iterator<Runnable> object;
         boolean bl;
         FlowTrace.maybeReport();
+        if (LANE_DIAG) {
+            long now = System.currentTimeMillis();
+            if (now - lastLaneDiagMs >= 20000L) {
+                lastLaneDiagMs = now;
+                Constants.LOG.info("[SR-LANE] {}", laneDiag());
+            }
+        }
         if ((++I & 0x3FF) == 0) {
             RawFlowTileStore.flush();
         }
@@ -567,6 +584,12 @@ public final class StreamPrefetcher {
         }
         boolean bl = false;
         try {
+            // 预热期不让 prefetch 接管建板（见 PREWARM_PREFETCH_ALLOWED 注释）。n != -1 排除
+            // urgent（submitChunkDemand 与 2 参 a(RiverEngine,PlateKey) 走的 d 池），只拦 ahead/passive。
+            // 标记 q 由 finally 释放（bl==false → q.remove(l)），urgent 的 f 计数未加、此处也不减。
+            if (n != -1 && PREWARM_PREFETCH_ALLOWED && StreamsStartupProgress.isActive()) {
+                return;
+            }
             if (n != -1) {
                 long l2 = System.nanoTime() + 60000000000L;
                 while (LowResGrid.urgentWaiterCount() > 0 && RiverEngine.activeBuildCount() >= 4 && System.nanoTime() < l2) {
