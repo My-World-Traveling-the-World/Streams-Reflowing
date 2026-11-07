@@ -1257,7 +1257,8 @@ public final class StreamsWorldgen {
             try {
                 String string2 = serverLevel.dimension().location().toString().replace(':', '_').replace('/', '_');
                 Path path2 = serverLevel.getServer().getWorldPath(LevelResource.ROOT).resolve("streamsreflowing").resolve(string2);
-                FileNetworkStore fileNetworkStore = new FileNetworkStore(path2, l, riverEngine2.config());
+                FileNetworkStore fileNetworkStore = new FileNetworkStore(
+                        path2, l, riverEngine2.config(), ModSetFingerprint.current());
                 riverEngine2.setNetworkStore(fileNetworkStore);
                 if (serverLevel.dimension().equals(Level.OVERWORLD)) {
                     RiverFlowFields.initStore(path2, fileNetworkStore.fingerprint());

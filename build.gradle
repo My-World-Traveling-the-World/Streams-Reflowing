@@ -31,6 +31,9 @@ dependencies {
     // Sable 把 companion 数学库套在 META-INF/jars 里（sable-companion-fabric-1.21.1-1.6.0.jar），
     // 单独抽出来 remap 后挂上；否则 companion.math.BoundingBox3i / Pose3d / SubLevelAccess 解析不到。
     compileOnly files('_recover/libs/named/sable-companion-fabric-1.21.1-1.6.0.jar')
+    // 单测：只跑纯 Java 的核心类（plate 缓存落盘 / 指纹），不启动游戏。
+    testImplementation "org.junit.jupiter:junit-jupiter:5.11.4"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
 }
 
 loom {
@@ -71,4 +74,7 @@ java {
     targetCompatibility = JavaVersion.VERSION_21
 }
 
-test { failOnNoDiscoveredTests = false }
+test {
+    useJUnitPlatform()
+    failOnNoDiscoveredTests = false
+}

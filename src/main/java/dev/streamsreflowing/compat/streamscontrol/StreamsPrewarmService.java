@@ -127,15 +127,34 @@ public final class StreamsPrewarmService {
             List<PlateRef> plates = enumeratePlates(context, centerX, centerZ,
                     config.startupRadiusChunks());
             StreamsSamplerModeController.ensureInitialPlateCacheCapacity(plates.size());
+            ExecutorService executor = startupExecutor(config.startupPlateWorkers());
+            // 第一段：并行探测磁盘缓存。上一局预热完成时每块板都已增量落盘
+            // （saves/<world>/streamsreflowing/<dim>/r.<cx>.<cz>.srn），这里把它们读回内存，
+            // 既计入 alreadyReady，也不再进入第二段的 build —— 第二次进同一存档就是 0 次构建。
+            int[] states = primePlateStates(context, plates, executor);
             int ready = 0;
+            int restoredFromDisk = 0;
             List<PlateRef> missing = new ArrayList<>();
-            for (PlateRef plate : plates) {
-                if (isReady(context, plate.key())) ready++;
-                else missing.add(plate);
+            for (int index = 0; index < plates.size(); index++) {
+                if (states[index] > 0) {
+                    ready++;
+                    if (states[index] == 2) restoredFromDisk++;
+                } else {
+                    missing.add(plates.get(index));
+                }
             }
             final int alreadyReady = ready;
-            StreamsStartupProgress.begin(plates.size(), alreadyReady, config.startupPlateWorkers());
-            ExecutorService executor = startupExecutor(config.startupPlateWorkers());
+            final int restored = restoredFromDisk;
+            LOGGER.info("Streams startup prewarm scheduled: center=({},{}), radius={} chunks, "
+                            + "plates={}, alreadyReady={}, restoredFromDisk={}, buildOwners={}, "
+                            + "samplerThreads={}, plateScale={}.",
+                    centerX, centerZ, config.startupRadiusChunks(), plates.size(), alreadyReady,
+                    restored, config.startupPlateWorkers(), config.startupSamplerThreads(),
+                    context.plateScale());
+            // 全命中时不点亮进度卡片：没有要等的构建，UI 不该再弹。
+            if (!missing.isEmpty()) {
+                StreamsStartupProgress.begin(plates.size(), alreadyReady, config.startupPlateWorkers());
+            }
             long started = System.nanoTime();
             AtomicInteger completed = new AtomicInteger(alreadyReady);
             int progressStep = Math.max(1, plates.size() / 10);
@@ -160,18 +179,14 @@ public final class StreamsPrewarmService {
                 StreamsStartupProgress.finish();
                 if (failure == null) {
                     LOGGER.info("Streams startup prewarm complete: radius={} chunks, plates={}, "
-                                    + "alreadyReady={}, built={}, elapsedMs={}.",
-                            config.startupRadiusChunks(), plates.size(), alreadyReady, missing.size(),
-                            elapsedMillis(started));
+                                    + "alreadyReady={}, restoredFromDisk={}, built={}, elapsedMs={}.",
+                            config.startupRadiusChunks(), plates.size(), alreadyReady, restored,
+                            missing.size(), elapsedMillis(started));
                 } else {
                     LOGGER.warn("Streams startup prewarm finished with an error after {} ms",
                             elapsedMillis(started), unwrap(failure));
                 }
             });
-            LOGGER.info("Streams startup prewarm scheduled: center=({},{}), radius={} chunks, "
-                            + "plates={}, alreadyReady={}, buildOwners={}, samplerThreads={}, plateScale={}.",
-                    centerX, centerZ, config.startupRadiusChunks(), plates.size(), alreadyReady,
-                    config.startupPlateWorkers(), config.startupSamplerThreads(), context.plateScale());
         } catch (Throwable failure) {
             if (initialGenerationEntered) StreamsSamplerModeController.exitInitialGeneration();
             StreamsStartupProgress.clear();
@@ -418,12 +433,64 @@ public final class StreamsPrewarmService {
         return new EngineContext(current, engine, plateScale);
     }
 
+    /**
+     * 运行期扫描用的就绪判定：只看内存缓存。
+     *
+     * <p>调用点在服务器线程上（tick / scheduleRuntime），这里绝不读盘；磁盘命中留给
+     * 后台 owner 的 {@code networkFor}（它在本线程外 load/build），行为与改动前一致。</p>
+     */
     private static boolean isReady(EngineContext context, Object plate) {
         try {
             return (boolean) context.access().isPlateReady().invoke(context.engine(), plate);
         } catch (ReflectiveOperationException failure) {
             throw new CompletionException(failure);
         }
+    }
+
+    /**
+     * 启动预热第一段专用的缓存状态探针，经反射取 {@code RiverEngine.plateCacheState(PlateKey)}：
+     * {@code 0} = 缺（要建）、{@code 1} = 内存已就绪、{@code 2} = 本次从磁盘缓存读回。
+     *
+     * <p>旧版 {@code RiverEngine} 没有这个方法时退回只看内存的 {@code isPlateReady}
+     * （返回 1/0），行为与改动前一致。</p>
+     */
+    private static int plateState(EngineContext context, Object plate) {
+        try {
+            Access current = context.access();
+            Method probe = current.plateCacheState();
+            if (probe != null) {
+                return ((Number) probe.invoke(context.engine(), plate)).intValue();
+            }
+            return ((boolean) current.isPlateReady().invoke(context.engine(), plate)) ? 1 : 0;
+        } catch (ReflectiveOperationException failure) {
+            throw new CompletionException(failure);
+        }
+    }
+
+    /**
+     * 预热第一段：并行探测每块板的磁盘缓存。
+     *
+     * <p>命中时 {@code plateCacheState} 会把上一局落盘的产物读回内存，因此这些板既计入
+     * alreadyReady，也不会进入第二段的构建队列。单块探测失败（反射/IO）只当未命中，
+     * 绝不让它打断整轮启动预热。</p>
+     */
+    private static int[] primePlateStates(EngineContext context, List<PlateRef> plates,
+                                          ExecutorService executor) {
+        int[] states = new int[plates.size()];
+        List<CompletableFuture<Void>> priming = new ArrayList<>(plates.size());
+        for (int index = 0; index < plates.size(); index++) {
+            int slot = index;
+            Object key = plates.get(index).key();
+            priming.add(CompletableFuture.runAsync(() -> {
+                try {
+                    states[slot] = plateState(context, key);
+                } catch (Throwable failure) {
+                    states[slot] = 0;
+                }
+            }, executor));
+        }
+        CompletableFuture.allOf(priming.toArray(new CompletableFuture[0])).join();
+        return states;
     }
 
     private static void build(EngineContext context, Object plate) {
@@ -452,7 +519,8 @@ public final class StreamsPrewarmService {
                         configClass.getMethod("plateScale"),
                         plateClass.getConstructor(int.class, int.class),
                         engineClass.getMethod("networkFor", plateClass),
-                        engineClass.getMethod("isPlateReady", plateClass));
+                        engineClass.getMethod("isPlateReady", plateClass),
+                        findPlateCacheState(engineClass, plateClass));
             } catch (Throwable failure) {
                 access = null;
                 LOGGER.warn("Streams prewarm API initialization failed", failure);
@@ -467,6 +535,15 @@ public final class StreamsPrewarmService {
                     && method.getParameterCount() == 1) return method;
         }
         throw new NoSuchMethodException("StreamsWorldgen.engine");
+    }
+
+    /** {@code RiverEngine.plateCacheState(PlateKey)} 可选：老版本没有它时返回 null，退回内存探针。 */
+    private static Method findPlateCacheState(Class<?> engineClass, Class<?> plateClass) {
+        try {
+            return engineClass.getMethod("plateCacheState", plateClass);
+        } catch (NoSuchMethodException | RuntimeException absent) {
+            return null;
+        }
     }
 
     private static synchronized ExecutorService startupExecutor(int workers) {
@@ -522,7 +599,7 @@ public final class StreamsPrewarmService {
 
     private record Access(Method engine, Method config, Method plateScale,
                           Constructor<?> plateConstructor, Method networkFor,
-                          Method isPlateReady) {
+                          Method isPlateReady, Method plateCacheState) {
     }
 
     private record EngineContext(Access access, Object engine, double plateScale) {

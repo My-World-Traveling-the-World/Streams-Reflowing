@@ -1042,6 +1042,65 @@ public final class RiverEngine {
         return (this.l ? this.k : this.j).isReady(plateKey);
     }
 
+    /** {@link #plateCacheState} 返回值：没有可用缓存，调用方应照旧构建。 */
+    public static final int PLATE_MISSING = 0;
+    /** {@link #plateCacheState} 返回值：本会话内存缓存里已经就绪。 */
+    public static final int PLATE_READY = 1;
+    /** {@link #plateCacheState} 返回值：本次调用从磁盘缓存读回并填入内存缓存。 */
+    public static final int PLATE_RESTORED = 2;
+
+    /**
+     * 启动预热用的 plate 状态探针（运行期扫描仍用 {@link #isPlateReady}，只看内存、不读盘）。
+     *
+     * <p>返回 {@link #PLATE_READY}（内存已就绪）、{@link #PLATE_RESTORED}（磁盘命中，本次
+     * 读回内存）或 {@link #PLATE_MISSING}（需要构建）。语义与结果说明：</p>
+     *
+     * <ul>
+     *   <li>磁盘命中走的复原路径与 {@link #baseFor} 完全一致：{@code NetworkStore.load} 把
+     *       当初 {@code NetworkTracer.build} 出来的段/湖原样读回，再由
+     *       {@code NetworkTracer.assemble} 重建同一份 {@link RiverNetwork}。段与湖都是
+     *       {@code double}/{@code int} 原值序列化，因此命中与重建的地形输出逐位一致。</li>
+     *   <li>命中后会把网络放进内存缓存（{@code j}），后续 {@link #networkFor} 直接零构建返回。</li>
+     *   <li>{@code connectNearbyWater} 打开时就绪的是跨板连接网络（{@code k}），它不是逐板
+     *       落盘的产物，这里直接返回 {@link #PLATE_MISSING}，保持原有构建行为不变。</li>
+     *   <li>文件损坏 / 截断 / 版本号或指纹不符时 {@code load} 返回 null，这里按未命中处理；
+     *       任何 IO 或运行时异常同样只当未命中，绝不向上抛。</li>
+     * </ul>
+     */
+    public int plateCacheState(PlateKey plateKey) {
+        if (this.isPlateReady(plateKey)) {
+            return PLATE_READY;
+        }
+        if (this.l) {
+            return PLATE_MISSING;
+        }
+        if (this.j.contains(plateKey)) {
+            // 缓存里有条目但还没就绪：要么有构建在飞，要么上一次构建失败了。绝不能在这里等 ——
+            // 服务器线程和渲染线程都可能调到这里。交回原来的构建路径（产物逐位相同），
+            // 这一轮不记「已就绪」。
+            return PLATE_MISSING;
+        }
+        NetworkStore networkStore = this.u;
+        if (networkStore == null) {
+            return PLATE_MISSING;
+        }
+        RiverNetwork restored;
+        try {
+            restored = networkStore.load(plateKey);
+        } catch (Throwable failure) {
+            Constants.LOG.warn("Streams plate {} could not be restored from disk; rebuilding ({})",
+                    plateKey, failure.toString());
+            return PLATE_MISSING;
+        }
+        if (restored == null) {
+            return PLATE_MISSING;
+        }
+        // 已经是成品，直接放进内存缓存：putIfAbsent 语义由 PlateRiverCache.get 负责，
+        // 与并发构建撞车时以先到者为准，两条路径的产物本来就逐位相同。
+        this.j.get(plateKey, () -> restored, () -> restored);
+        return this.j.isReady(plateKey) ? PLATE_RESTORED : PLATE_MISSING;
+    }
+
     public boolean platesReadyNear(double d, double d2, double d3) {
         for (PlateKey plateKey : this.platesNear(d, d2, d3)) {
             if (this.isPlateReady(plateKey)) continue;
