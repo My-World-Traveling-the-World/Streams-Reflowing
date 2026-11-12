@@ -52,6 +52,9 @@ implements ModInitializer {
         StreamsConfigFabric.load();
         StreamsConfigFabric.startWatching();
         StreamsReflowing.init();
+        // RoadWeaver 标准 API：注册 StreamsThreadControl 通道 + 初始生成生命周期回调。
+        // 替代原先两个方向各一套的硬编码（本 mod 的 @Pseudo @Mixin 与道路的反射）。
+        dev.streamsreflowing.compat.streamscontrol.PlainCraftRoadWeaverBridge.register();
         ServerChunkEvents.CHUNK_LOAD.register((level, chunk) -> {
             byte[] u;
             if (level.dimension().equals(Level.OVERWORLD) && (u = RTFBridge.flowUnderlay(chunk)) != null) {
