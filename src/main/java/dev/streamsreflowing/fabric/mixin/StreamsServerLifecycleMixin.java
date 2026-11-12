@@ -2,6 +2,7 @@ package dev.streamsreflowing.fabric.mixin;
 
 import java.util.function.BooleanSupplier;
 import dev.streamsreflowing.compat.streamscontrol.StreamsPrewarmService;
+import net.shiroha233.roadweaver.api.outgoing.RiverReadinessBroadcast;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -38,34 +39,40 @@ public abstract class StreamsServerLifecycleMixin {
         StreamsPrewarmService.awaitStartup(level);
         // Rivers are fully built, and this is the earliest point at which that is true:
         // awaitStartup returns only once every required plate exists. It is therefore where
-        // the Great Wall's prewarm may begin.
+        // anything that depends on rivers (the Great Wall's prewarm) may begin.
         //
-        // It cannot be driven from RoadWeaver. RoadWeaver's own river step
+        // It cannot be driven from RoadWeaver: its own river step
         // (InitialGenManager.prewarmInitialRiverPlates) runs much later, after its structure
         // scan, so hooking that left the wall waiting on roads rather than following them;
         // a measured session showed the wall's prewarm never starting at all while road work
-        // was already under way.
-        plaincraft$notifyGreatWallRiversReady();
+        // was already under way. RoadWeaver therefore only hosts the contract; the stream
+        // side is the one that knows when rivers are actually ready.
+        plaincraft$broadcastRiverReadiness();
     }
 
     /**
-     * Tells the Great Wall its prewarm may start, without depending on it.
+     * Broadcasts "rivers are ready" through the standard RoadWeaver contract.
      *
-     * <p>Reflection because the wall is an optional mod: naming its class directly would make
-     * this patch fail to load without it. Every failure is swallowed - no wall, a renamed
-     * entry point, a wall that throws - so river generation is never affected by the wall's
-     * presence or health. The notification is idempotent on the wall's side, so a second one
-     * from RoadWeaver or from the wall's own fallback costs nothing.
+     * <p>This used to be a hardcoded {@code Class.forName("local.plaincraft.greatwall.lifecycle.WorldServices")}
+     * straight into the Great Wall's internals - a mod-to-mod coupling that would silently
+     * stop working the moment the wall renamed that entry point, with no compile-time
+     * protection at all. It now goes through {@link RiverReadinessBroadcast}: streams
+     * publishes, subscribers (the wall) listen, and neither side names the other.</p>
+     *
+     * <p>The contract jar ships inside RoadWeaver (Jar-in-Jar) and {@code fabric.mod.json}
+     * declares {@code depends: roadweaver_api}, so a missing contract is a load-time error
+     * rather than a runtime {@code NoSuchMethodError}. Every failure is still swallowed here:
+     * river generation must never be affected by a subscriber's health.</p>
+     *
+     * <p>Repeated calls are fine - subscribers dedupe per save, and suppression would leave
+     * a second save without a wall prewarm.</p>
      */
-    private static void plaincraft$notifyGreatWallRiversReady() {
+    private static void plaincraft$broadcastRiverReadiness() {
         try {
-            Class<?> services = Class.forName("local.plaincraft.greatwall.lifecycle.WorldServices");
-            services.getMethod("riversPrewarmed").invoke(null);
-            LOGGER.info("Streams startup prewarm complete; Great Wall prewarm signalled.");
-        } catch (ClassNotFoundException noWall) {
-            // Expected whenever the wall is not installed.
+            int fanOut = RiverReadinessBroadcast.publishReady(RiverReadinessBroadcast.PROVIDER_STREAMS);
+            LOGGER.info("Streams startup prewarm complete; river readiness broadcast (subscribers={}).", fanOut);
         } catch (Throwable failure) {
-            LOGGER.warn("Streams could not signal the Great Wall; river generation is unaffected", failure);
+            LOGGER.warn("Streams could not broadcast river readiness; river generation is unaffected", failure);
         }
     }
 
@@ -77,11 +84,11 @@ public abstract class StreamsServerLifecycleMixin {
         LOGGER.info("Streams startup prewarm phase entered before RoadWeaver initial planning.");
         StreamsPrewarmService.beginStartup(level);
         StreamsPrewarmService.awaitStartup(level);
-        // The createLevels hook that signals the wall only runs on a freshly created world
+        // The createLevels hook that broadcasts only runs on a freshly created world
         // (setInitialSpawn is skipped when the world is already initialised). On a re-opened
-        // world the rivers still finish here, so signal the wall again - idempotent on the
-        // wall's side - rather than leaving an existing world without a wall prewarm.
-        plaincraft$notifyGreatWallRiversReady();
+        // world the rivers still finish here, so broadcast again - subscribers dedupe per
+        // save - rather than leaving an existing world without a wall prewarm.
+        plaincraft$broadcastRiverReadiness();
     }
 
     @Inject(method = "tickServer", at = @At("TAIL"))
@@ -108,5 +115,8 @@ public abstract class StreamsServerLifecycleMixin {
     @Inject(method = "stopServer", at = @At("HEAD"))
     private void plaincraft$stopStreamsPrewarm(CallbackInfo ci) {
         StreamsPrewarmService.stop((MinecraftServer) (Object) this);
+        // Clear the "rivers ready" flag so the next save starts clean. Subscribers stay
+        // registered - they belong to the mod lifecycle, not the save lifecycle.
+        RiverReadinessBroadcast.reset();
     }
 }
