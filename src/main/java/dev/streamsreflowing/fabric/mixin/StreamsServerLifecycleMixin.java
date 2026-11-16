@@ -15,9 +15,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-// RoadWeaver uses the default mixin priority (1000) at this same lifecycle
-// point. Run first so its initial planner cannot enter before river plates are
-// fully prepared.
+// 保留既有优先级；依赖顺序由就绪契约确认，不能仅靠源码优先级推断最终注入次序。
 @Mixin(value = MinecraftServer.class, priority = 900)
 public abstract class StreamsServerLifecycleMixin {
     private static final Logger LOGGER = LoggerFactory.getLogger("PlainCraft Streams Safety");
@@ -36,44 +34,8 @@ public abstract class StreamsServerLifecycleMixin {
         LOGGER.info("Streams startup prewarm entering before initial spawn chunk generation at candidate ({},{}).",
                 spawnCandidate.getX(), spawnCandidate.getZ());
         StreamsPrewarmService.beginStartup(level, spawnCandidate.getX(), spawnCandidate.getZ());
-        StreamsPrewarmService.awaitStartup(level);
-        // Rivers are fully built, and this is the earliest point at which that is true:
-        // awaitStartup returns only once every required plate exists. It is therefore where
-        // anything that depends on rivers (the Great Wall's prewarm) may begin.
-        //
-        // It cannot be driven from RoadWeaver: its own river step
-        // (InitialGenManager.prewarmInitialRiverPlates) runs much later, after its structure
-        // scan, so hooking that left the wall waiting on roads rather than following them;
-        // a measured session showed the wall's prewarm never starting at all while road work
-        // was already under way. RoadWeaver therefore only hosts the contract; the stream
-        // side is the one that knows when rivers are actually ready.
-        plaincraft$broadcastRiverReadiness();
-    }
-
-    /**
-     * Broadcasts "rivers are ready" through the standard RoadWeaver contract.
-     *
-     * <p>This used to be a hardcoded {@code Class.forName("local.plaincraft.greatwall.lifecycle.WorldServices")}
-     * straight into the Great Wall's internals - a mod-to-mod coupling that would silently
-     * stop working the moment the wall renamed that entry point, with no compile-time
-     * protection at all. It now goes through {@link RiverReadinessBroadcast}: streams
-     * publishes, subscribers (the wall) listen, and neither side names the other.</p>
-     *
-     * <p>The contract jar ships inside RoadWeaver (Jar-in-Jar) and {@code fabric.mod.json}
-     * declares {@code depends: roadweaver_api}, so a missing contract is a load-time error
-     * rather than a runtime {@code NoSuchMethodError}. Every failure is still swallowed here:
-     * river generation must never be affected by a subscriber's health.</p>
-     *
-     * <p>Repeated calls are fine - subscribers dedupe per save, and suppression would leave
-     * a second save without a wall prewarm.</p>
-     */
-    private static void plaincraft$broadcastRiverReadiness() {
-        try {
-            int fanOut = RiverReadinessBroadcast.publishReady(RiverReadinessBroadcast.PROVIDER_STREAMS);
-            LOGGER.info("Streams startup prewarm complete; river readiness broadcast (subscribers={}).", fanOut);
-        } catch (Throwable failure) {
-            LOGGER.warn("Streams could not broadcast river readiness; river generation is unaffected", failure);
-        }
+        // 由河流自己的结果门决定是否发布，异常返回不再等价于预热完成。
+        StreamsPrewarmService.publishStartupReadiness(level);
     }
 
     @Inject(method = "prepareLevels", at = @At("HEAD"))
@@ -83,12 +45,8 @@ public abstract class StreamsServerLifecycleMixin {
         if (level == null) return;
         LOGGER.info("Streams startup prewarm phase entered before RoadWeaver initial planning.");
         StreamsPrewarmService.beginStartup(level);
-        StreamsPrewarmService.awaitStartup(level);
-        // The createLevels hook that broadcasts only runs on a freshly created world
-        // (setInitialSpawn is skipped when the world is already initialised). On a re-opened
-        // world the rivers still finish here, so broadcast again - subscribers dedupe per
-        // save - rather than leaving an existing world without a wall prewarm.
-        plaincraft$broadcastRiverReadiness();
+        // 重开同样走结果门；重复入口不重启失败批次，也不绕过失败判定。
+        StreamsPrewarmService.publishStartupReadiness(level);
     }
 
     @Inject(method = "tickServer", at = @At("TAIL"))

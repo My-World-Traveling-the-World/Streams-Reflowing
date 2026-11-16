@@ -80,5 +80,6 @@ java {
 
 test {
     useJUnitPlatform()
-    failOnNoDiscoveredTests = false
+    // 测试入口失效不能被零测试成功掩盖；新增守卫必须真正被发现。
+    failOnNoDiscoveredTests = true
 }

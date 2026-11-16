@@ -26,6 +26,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
 import net.minecraft.core.BlockPos;
+import net.shiroha233.roadweaver.api.outgoing.RiverReadinessBroadcast;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -109,20 +110,21 @@ public final class StreamsPrewarmService {
 
     public static void beginStartup(ServerLevel level, int centerX, int centerZ) {
         if (!isOverworld(level)) return;
-        StreamsPrewarmConfig config = StreamsPrewarmConfig.reload();
-        if (!config.enabled() || config.startupRadiusChunks() <= 0) {
-            return;
-        }
+        WorldState state = STATES.computeIfAbsent(level, ignored -> new WorldState());
+        if (!state.startup.begin()) return;
         boolean initialGenerationEntered = false;
         try {
-            WorldState state = STATES.computeIfAbsent(level, ignored -> new WorldState());
-            if (state.startupFuture != null) return;
+            StreamsPrewarmConfig config = StreamsPrewarmConfig.reload();
+            if (!config.enabled() || config.startupRadiusChunks() <= 0) {
+                state.startup.disabled();
+                return;
+            }
             StreamsSamplerModeController.enterInitialGeneration();
             initialGenerationEntered = true;
             EngineContext context = context(level);
             if (context == null) {
-                StreamsSamplerModeController.exitInitialGeneration();
-                return;
+                // 启用预热却没有引擎是失败，不能当成没有前置工作。
+                throw new IllegalStateException("Streams startup engine unavailable");
             }
             List<PlateRef> plates = enumeratePlates(context, centerX, centerZ,
                     config.startupRadiusChunks());
@@ -174,7 +176,7 @@ public final class StreamsPrewarmService {
             }
             CompletableFuture<Void> combined = CompletableFuture.allOf(
                     futures.toArray(new CompletableFuture[0]));
-            state.startupFuture = combined.whenComplete((ignored, failure) -> {
+            state.startup.completeWhen(combined.whenComplete((ignored, failure) -> {
                 StreamsSamplerModeController.exitInitialGeneration();
                 StreamsStartupProgress.finish();
                 if (failure == null) {
@@ -186,8 +188,10 @@ public final class StreamsPrewarmService {
                     LOGGER.warn("Streams startup prewarm finished with an error after {} ms",
                             elapsedMillis(started), unwrap(failure));
                 }
-            });
+            }));
         } catch (Throwable failure) {
+            // 同步初始化与异步构建失败都必须留下结果，防止下游误报 ready。
+            state.startup.failed();
             if (initialGenerationEntered) StreamsSamplerModeController.exitInitialGeneration();
             StreamsStartupProgress.clear();
             LOGGER.warn("Could not start Streams startup prewarm", unwrap(failure));
@@ -196,12 +200,29 @@ public final class StreamsPrewarmService {
 
     public static void awaitStartup(ServerLevel level) {
         WorldState state = STATES.get(level);
-        CompletableFuture<Void> future = state == null ? null : state.startupFuture;
-        if (future == null) return;
+        if (state != null) state.startup.await();
+    }
+
+    /** 结果门属于河流发布方；保留旧 awaitStartup 签名以兼容已有调用者。 */
+    public static void publishStartupReadiness(ServerLevel level) {
+        WorldState state = STATES.get(level);
+        if (state == null) {
+            LOGGER.warn("STREAMS_STARTUP_NOT_READY: outcome=NOT_STARTED");
+            return;
+        }
         try {
-            future.join();
-        } catch (CompletionException ignored) {
-            // Completion logging is centralized in beginStartup.
+            RiverStartupReadiness.Outcome outcome = state.startup.publishIfReady(() -> {
+                int count = RiverReadinessBroadcast.publishReady(RiverReadinessBroadcast.PROVIDER_STREAMS);
+                LOGGER.info("STREAMS_STARTUP_READY: subscribers={}", count);
+            });
+            // 禁用代表用户没有要求预热，不应永久挡住后续模组；日志与真实完成分开。
+            if (outcome == RiverStartupReadiness.Outcome.DISABLED) {
+                LOGGER.info("STREAMS_STARTUP_BYPASSED: prewarm disabled by configuration");
+            } else if (outcome != RiverStartupReadiness.Outcome.COMPLETE) {
+                LOGGER.warn("STREAMS_STARTUP_NOT_READY: outcome={}", outcome);
+            }
+        } catch (Throwable failure) {
+            LOGGER.warn("Streams could not broadcast river readiness", unwrap(failure));
         }
     }
 
@@ -291,7 +312,10 @@ public final class StreamsPrewarmService {
         ServerLevel level = server.overworld();
         if (level == null) return;
         WorldState state = STATES.remove(level);
-        if (state != null) state.closed = true;
+        if (state != null) {
+            state.closed = true;
+            state.startup.stop();
+        }
         StreamsGpuTerrainSampler.close(level);
         StreamsStartupProgress.clear();
     }
@@ -611,7 +635,7 @@ public final class StreamsPrewarmService {
     private static final class WorldState {
         private final Map<UUID, Long> playerCenters = new ConcurrentHashMap<>();
         private final ConcurrentHashMap<Object, Boolean> pendingPlates = new ConcurrentHashMap<>();
-        private volatile CompletableFuture<Void> startupFuture;
+        private final RiverStartupReadiness startup = new RiverStartupReadiness();
         private volatile boolean closed;
     }
 
