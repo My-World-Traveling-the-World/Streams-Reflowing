@@ -1,5 +1,43 @@
 # 河流后续开发交接
 
+## 2026-11-21：第42轮，颜色Mixin双命名空间绑定修正
+
+### 一、改了什么
+
+开发行为修复/正式算法等价：Fabric的WaterTintMixin源码原用field_5666/5/4作为Shadow，开发目标BiomeColors只有WATER/GRASS/FOLIAGE_COLOR_RESOLVER。已改用真实官方字段名，由Loom转换生产名。三种颜色原包裹顺序、Kind和回写保留；不改色彩算法、配置、schema，也没动被Fabric构建排除的Forge/NeoForge目录。
+
+### 二、我验证了什么（附变异）
+
+先用真实编译class与真实named Minecraft资源（ASM读取、不初始化客户端）验证旧源码：2项均AssertionFailedError，错误/跳过0。命名绑定测试有3字段非空计数；另一项逐条验证三个解析器的读/Kind/一次wrap/原字段写回。证据docs/evidence/water-tint-original-failure-20261121.json。
+
+| 临时改坏什么 | 实际2项定向测试的断言失败数 |
+| --- | --- |
+| 水色Shadow改回生产名，混入开发源码 | 2 |
+| 水色误用草色Kind | 1 |
+
+两组正常编译、errors/skipped0、全为AssertionFailedError，逐组checkout与原字节校验恢复。恢复后完整test/compileJava/planContractJar/remapJar成功 **73项，失败/错误/跳过0**，build/round42-final.log；本轮实际重建remap日志round42-binding-positive.log中原三条Cannot remap告警消失（最终恢复后remap为UP-TO-DATE）。
+
+tools/review/water_tint_artifact_probe.py用javap核实真实开发class及正式intermediary包，三个字段/描述符均对应各自Minecraft目标；正式Mixin类目标也被映射。修复前正式包的三个生产字段本来就正确，不能把旧告警包装成“当前成品必崩”。修复前后正式类全部方法反汇编一致（忽略常量池编号）；原始class字节不同，不能说逐字相同。见water-tint-bindings-20261121.json。
+
+同一编译API消费者再次分别加载真实named契约和正式jar，两端CONTRACT_PASS、10个类签名一致；见plan-api-artifacts-final-20261121.json。
+
+### 三、我没能验证什么
+
+没有启动开发客户端/正式Minecraft应用全部Mixin，没有现场色彩截图、GPU/渲染或帧率测量。字段绑定及指令等价不等于完整客户端兼容证明；其他可选Mixin尚须运行矩阵。
+
+### 四、遗留半截
+
+第41轮几何去重已交付，其他外来河道/邻坡直接桶扫描仍未优化。NetworkTracer等大类与整板旧产物守卫继续待做。河流无remote，不能push，未部署。相邻道路/长城push仍受此前自动审批拒绝阻挡，未重试或绕过。
+
+### 五、下一轮先做什么
+
+按三仓联合报告先补完整板块BuildContext/旧整板产物，再迁洪泛、路由和跨板连接；现场测候选M/U、采样/落块占比及三模组启动。不要用去掉颜色功能或关闭观测来掩盖负载。
+
+### 六、踩到的坑
+
+本次反编译源码里的field_名字恰好能在正式环境绑定，但不能在官方开发命名空间绑定；必须分别验证两端。不能只看构建告警便报正式包故障，也不能只看正式包无误便放任开发链失效。字节码指令一致与class逐字一致是不同证据。
+
+
 ## 2026-11-21：第41轮，最近河段先去重再投影
 
 ### 一、改了什么

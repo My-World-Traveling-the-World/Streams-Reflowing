@@ -1,6 +1,4 @@
-/*
- * Decompiled with CFR 0.152.
- */
+/* 三种颜色沿用原包裹规则；源码使用开发映射名，让Loom统一转换，避免开发侧Shadow无目标。 */
 package dev.streamsreflowing.fabric.mixin;
 
 import dev.streamsreflowing.client.StreamTint;
@@ -19,21 +17,21 @@ public abstract class WaterTintMixin {
     @Shadow
     @Final
     @Mutable
-    public static ColorResolver field_5666;
+    public static ColorResolver WATER_COLOR_RESOLVER;
     @Shadow
     @Final
     @Mutable
-    public static ColorResolver field_5665;
+    public static ColorResolver GRASS_COLOR_RESOLVER;
     @Shadow
     @Final
     @Mutable
-    public static ColorResolver field_5664;
+    public static ColorResolver FOLIAGE_COLOR_RESOLVER;
 
     @Inject(method={"<clinit>"}, at={@At(value="TAIL")}, require=0)
     private static void streamsreflowing$wrapResolvers(CallbackInfo ci) {
-        field_5666 = StreamTint.wrap(field_5666, StreamTint.Kind.WATER);
-        field_5665 = StreamTint.wrap(field_5665, StreamTint.Kind.GRASS);
-        field_5664 = StreamTint.wrap(field_5664, StreamTint.Kind.FOLIAGE);
+        WATER_COLOR_RESOLVER = StreamTint.wrap(WATER_COLOR_RESOLVER, StreamTint.Kind.WATER);
+        GRASS_COLOR_RESOLVER = StreamTint.wrap(GRASS_COLOR_RESOLVER, StreamTint.Kind.GRASS);
+        FOLIAGE_COLOR_RESOLVER = StreamTint.wrap(FOLIAGE_COLOR_RESOLVER, StreamTint.Kind.FOLIAGE);
     }
 }
 

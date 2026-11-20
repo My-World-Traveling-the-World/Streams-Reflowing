@@ -1,0 +1,20 @@
+[
+  {
+    "name": "water-shadow-intermediary-in-named",
+    "file": "src/main/java/dev/streamsreflowing/fabric/mixin/WaterTintMixin.java",
+    "tests": 2,
+    "assertion_failures": 2,
+    "errors": 0,
+    "skipped": 0,
+    "restored_sha256": "51e652b391cf542fa11374f81004fe804a8aded94ee914a6eadf7c2cc5c3628d"
+  },
+  {
+    "name": "water-uses-grass-kind",
+    "file": "src/main/java/dev/streamsreflowing/fabric/mixin/WaterTintMixin.java",
+    "tests": 2,
+    "assertion_failures": 1,
+    "errors": 0,
+    "skipped": 0,
+    "restored_sha256": "51e652b391cf542fa11374f81004fe804a8aded94ee914a6eadf7c2cc5c3628d"
+  }
+]
