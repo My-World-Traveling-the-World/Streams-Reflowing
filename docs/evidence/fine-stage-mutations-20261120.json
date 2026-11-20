@@ -1,0 +1,16 @@
+[
+  {
+    "name": "fine-empty",
+    "file": "src/main/java/dev/streamsreflowing/core/river/FineLakeRefiner.java",
+    "junit_failures": 3,
+    "restored": true,
+    "scope": "production fine lake behavior"
+  },
+  {
+    "name": "tracer-disconnected",
+    "file": "src/main/java/dev/streamsreflowing/core/river/NetworkTracer.java",
+    "junit_failures": 1,
+    "restored": true,
+    "scope": "production fine lake behavior"
+  }
+]
