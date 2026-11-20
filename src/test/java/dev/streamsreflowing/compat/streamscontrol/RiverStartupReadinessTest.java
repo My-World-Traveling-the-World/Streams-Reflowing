@@ -12,6 +12,24 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** 测河流自己的发布出口；发布回调作为端口，不用道路 Fake 替代河流状态。 */
 class RiverStartupReadinessTest {
+    @Test void nonblockingSnapshotPreservesFailureAndSession() {
+        var gate = new RiverStartupReadiness();
+        long session = gate.snapshot().session();
+        assertEquals(dev.streamsreflowing.api.RiverPlanApi.Phase.NOT_STARTED, gate.snapshot().phase());
+        assertTrue(gate.begin());
+        assertEquals(dev.streamsreflowing.api.RiverPlanApi.Phase.BUILDING, gate.snapshot().phase());
+        var work = new CompletableFuture<Void>();
+        gate.completeWhen(work);
+        work.completeExceptionally(new IllegalStateException("精修采样失败"));
+        assertEquals(dev.streamsreflowing.api.RiverPlanApi.Phase.FAILED, gate.snapshot().phase());
+        assertTrue(gate.snapshot().reason().contains("精修采样失败"));
+        gate.disabled();
+        assertEquals(dev.streamsreflowing.api.RiverPlanApi.Phase.FAILED, gate.snapshot().phase());
+        assertEquals(session, gate.snapshot().session());
+        gate.stop();
+        assertEquals(dev.streamsreflowing.api.RiverPlanApi.Phase.STOPPED, gate.snapshot().phase());
+        assertNotEquals(session, new RiverStartupReadiness().snapshot().session());
+    }
     @Test
     void unstartedCannotPublish() {
         RiverStartupReadiness gate = new RiverStartupReadiness();

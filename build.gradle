@@ -83,3 +83,11 @@ test {
     // 测试入口失效不能被零测试成功掩盖；新增守卫必须真正被发现。
     failOnNoDiscoveredTests = true
 }
+
+// 只导出零游戏依赖契约；消费方compileOnly，运行时由河流成品自身提供同一份类。
+tasks.register('planContractJar', Jar) {
+    dependsOn tasks.named('compileJava')
+    archiveFileName = 'streams-plan-api.jar'
+    destinationDirectory = layout.buildDirectory.dir('contract')
+    from(sourceSets.main.output) { include 'dev/streamsreflowing/api/**' }
+}

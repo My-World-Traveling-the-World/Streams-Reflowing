@@ -25,7 +25,8 @@ class RiverStartupWiringTest {
         assertTrue(source.contains("if (!state.startup.begin()) return;"));
         assertTrue(source.contains("state.startup.disabled();"));
         assertTrue(source.contains("throw new IllegalStateException(\"Streams startup engine unavailable\");"));
-        assertTrue(source.contains("state.startup.failed();"));
+        // 原因须随结果门保存，否则公开失败查询只能给出没有上下文的FAILED。
+        assertTrue(source.contains("state.startup.failed(unwrap(failure));"));
         assertTrue(source.contains("state.startup.completeWhen(combined.whenComplete("));
         assertTrue(source.contains("state.startup.publishIfReady(() -> {"));
         assertTrue(source.contains("state.startup.stop();"));

@@ -1,5 +1,36 @@
 # 河流后续开发交接
 
+## 2026-11-20：第39轮，提供方计划/失败状态契约（第六项提供端）
+
+### 一、改了什么
+
+契约/行为变更：新增纯Java RiverPlanApi v1，固定AVAILABLE/ABSENT/FAILED、不可变列/湖/板块记录、只读Session与预热入口。world为不透明世界句柄，只由提供方验证WorldGenLevel；契约本身不出现游戏或内部引擎类型。Fabric入口安装真实StreamsPlanProvider，WorldBoundRiverSession在调用前后核验引擎身份，旧世界/迟到计划被拒绝，板块列表复制为不可变快照。不打断已进入的共享构建。
+
+启动结果门增加非阻塞snapshot，带唯一session、BUILDING等阶段及有限长失败原因；原ready发布及禁用放行契约保留。planContractJar只导出契约类，运行时由河流成品提供，不让消费方重复内嵌。
+
+### 二、我验证了什么（附变异）
+
+完整test/planContractJar/remapJar成功59项，失败/错误/跳过0。新增API注册表3、启动快照1、世界会话3；已有正式失败接线断言改为要求实际cause。六组变异实际断言红：失败错报缺席1、丢原因1、session恒1→1、忽略世界归属2、迟到查询不复核1、返回可变列表1；均编译成功、无errors/skipped，checkout精确恢复。证据plan-api-mutations-20261120.json。
+
+工具tools/review/plan_contract_probe.py核对named契约与真实intermediary成品10个类的完整javap签名、两端无Minecraft/内部类型依赖；同一消费者只编译一次，在两个实际jar上分别运行，均CONTRACT_PASS。证据plan-api-artifacts-20261120.json含两jar SHA256。常量池重排导致字节不相同，未把字节比较误报ABI破坏。
+
+### 三、我没能验证什么
+
+未启动Fabric/Minecraft联机或退出重进；API探针不实例化实际ServerLevel或完整引擎。remapJar仍输出BiomeColors field_5664/5665/5666三条无法映射告警，构建成功，但本轮未核实其运行时影响，不能声称成品所有Mixin无问题。不能用API ABI对拍代替真实模板/几何验收。
+
+### 四、遗留半截
+
+道路消费端与长城状态命令正在各自仓库验证并独立提交；旧河流兼容适配继续保留。第五项余下大类阶段、七项外层事务未完。提供方查询不提供运行中强制重启按钮；失败需按现有退出重进流程重试，不能调用begin伪造新READY。无remote不能push，未部署。
+
+### 五、下一轮先做什么
+
+完成消费端的缺席/旧版/失败矩阵与负控，再做外层可恢复事务的离线暂停、换代取消与资源结案；跨tick默认仍等真实单块计时。
+
+### 六、踩到的坑
+
+可选API必须物理隔离链接，主消费者不能在缺模组时因类型解析崩溃。纯Java契约也会被remapper重排常量池，验收用签名与同字节码消费者实际运行，不要求class逐字节相同。诊断查询禁止join或触发引擎构建。
+
+
 ## 2026-11-20：第38轮，稀疏触及掩码（第四项）
 
 ### 一、改了什么

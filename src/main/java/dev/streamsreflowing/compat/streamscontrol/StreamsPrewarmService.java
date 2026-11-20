@@ -186,7 +186,7 @@ public final class StreamsPrewarmService {
             }));
         } catch (Throwable failure) {
             // 同步初始化与异步构建失败都必须留下结果，防止下游误报 ready。
-            state.startup.failed();
+            state.startup.failed(unwrap(failure));
             state.startupWork.close();
             LOGGER.warn("Could not start Streams startup prewarm", unwrap(failure));
         }
@@ -195,6 +195,15 @@ public final class StreamsPrewarmService {
     public static void awaitStartup(ServerLevel level) {
         WorldState state = STATES.get(level);
         if (state != null) state.startup.await();
+    }
+
+    /** 仅查询现有状态；不创建引擎、世界状态或新的后台任务。 */
+    public static dev.streamsreflowing.api.RiverPlanApi.Startup startupStatus(ServerLevel level) {
+        WorldState state = STATES.get(level);
+        return state == null
+                ? new dev.streamsreflowing.api.RiverPlanApi.Startup(0,
+                        dev.streamsreflowing.api.RiverPlanApi.Phase.NOT_STARTED, "本世界尚无启动会话")
+                : state.startup.snapshot();
     }
 
     /** 结果门属于河流发布方；保留旧 awaitStartup 签名以兼容已有调用者。 */
