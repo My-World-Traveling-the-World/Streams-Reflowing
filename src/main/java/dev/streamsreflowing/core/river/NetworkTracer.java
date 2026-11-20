@@ -1913,53 +1913,19 @@ public final class NetworkTracer {
         }
     }
 
+    /** 链编号独立成阶段，保留公开入口给缓存加载和预取消费者。 */
     public static int[] chainIds(List<RiverSegment> list) {
-        int n = list.size();
-        ChainEndpointIndex chainEndpointIndex = new ChainEndpointIndex(n);
-        ChainEndpointIndex chainEndpointIndex2 = new ChainEndpointIndex(n);
-        for (int i = 0; i < n; ++i) {
-            RiverSegment riverSegment = list.get(i);
-            chainEndpointIndex.add(NetworkTracer.a(riverSegment.x1(), riverSegment.z1()), i);
-            chainEndpointIndex2.add(NetworkTracer.a(riverSegment.x2(), riverSegment.z2()), i);
-        }
-        int[] nArray = new int[n];
-        for (int i = 0; i < n; ++i) {
-            nArray[i] = i;
-        }
-        for (int i = 0; i < chainEndpointIndex.counts.length; ++i) {
-            if (chainEndpointIndex.counts[i] != 1) continue;
-            long l = chainEndpointIndex.keys[i];
-            if (chainEndpointIndex2.count(l) != 1) continue;
-            NetworkTracer.a(nArray, chainEndpointIndex2.id(l), chainEndpointIndex.ids[i]);
-        }
-        int[] nArray5 = new int[n];
-        for (int i = 0; i < n; ++i) {
-            nArray5[i] = NetworkTracer.a(nArray, i);
-        }
-        return nArray5;
+        return RiverChains.chainIds(list);
     }
 
+    // 其他追踪阶段共用同一量化规则，避免拆分后边界口径漂移。
     private static long a(double d, double d2) {
-        long l = Math.round(d * 16.0) & 0xFFFFFFFFL;
-        long l2 = Math.round(d2 * 16.0) & 0xFFFFFFFFL;
-        return l << 32 | l2;
+        return RiverChains.key(d, d2);
     }
 
-    private static int a(int[] nArray, int n) {
-        while (nArray[n] != n) {
-            nArray[n] = nArray[nArray[n]];
-            n = nArray[n];
-        }
-        return n;
-    }
 
-    private static void a(int[] nArray, int n, int n2) {
-        int n3;
-        int n4 = NetworkTracer.a(nArray, n);
-        if (n4 != (n3 = NetworkTracer.a(nArray, n2))) {
-            nArray[n4] = n3;
-        }
-    }
+
+
 
     private static List<RiverSegment> a(int n, int[] nArray, int[] nArray2, List<Lake> list, Lake lake, boolean[] blArray, int[] nArray3, double[] dArray, double[] dArray2, LowResGrid lowResGrid, TerrainSampler terrainSampler, WetnessSampler wetnessSampler, StreamsConfig streamsConfig, long l, int n2) {
         Lake lake2;
@@ -3731,138 +3697,9 @@ public final class NetworkTracer {
     private record Connector(List<Pt> path, double wStart, double wEnd) {
     }
 
-    /**
-     * Open-addressing long-&gt;int table (count plus last segment index, 2^N slots, linear probing).
-     * It replaces the four HashMap&lt;Long,Integer&gt; maps chainIds used to allocate per call; keys are
-     * the very same quantized endpoint values from a(double,double), so counts and "last writer wins"
-     * indexes are unchanged. Only the iteration order differs, which is safe: the union-find result
-     * is a partition, every consumer (NetworkTracer, StreamPrefetcher) compares chain labels for
-     * equality only, and the set of union edges does not depend on iteration order.
-     */
-    private static final class ChainEndpointIndex {
-        final long[] keys;
-        final int[] counts;
-        final int[] ids;
-        private final int mask;
 
-        ChainEndpointIndex(int n) {
-            int n2 = 16;
-            while (n2 < n * 2) {
-                n2 <<= 1;
-            }
-            this.keys = new long[n2];
-            this.counts = new int[n2];
-            this.ids = new int[n2];
-            this.mask = n2 - 1;
-        }
 
-        private int slot(long l) {
-            long l2 = l * 0x9E3779B97F4A7C15L;
-            int n = (int)(l2 ^ l2 >>> 32) & this.mask;
-            while (this.counts[n] != 0 && this.keys[n] != l) {
-                n = n + 1 & this.mask;
-            }
-            return n;
-        }
 
-        void add(long l, int n) {
-            int n2 = this.slot(l);
-            if (this.counts[n2] == 0) {
-                this.keys[n2] = l;
-            }
-            ++this.counts[n2];
-            this.ids[n2] = n;
-        }
-
-        int count(long l) {
-            return this.counts[this.slot(l)];
-        }
-
-        int id(long l) {
-            return this.ids[this.slot(l)];
-        }
-    }
-
-    /**
-     * Primitive (double key, int value) min-heap that reproduces java.util.PriorityQueue's
-     * siftUp/siftDown array discipline with the same comparator (Double.compare on the key),
-     * so the pop order - including the order among equal keys - is identical to the boxed
-     * PriorityQueue of double[2] it replaces, but without a per-element allocation.
-     */
-    private static final class DoubleMinHeap {
-        private double[] keys = new double[16];
-        private int[] vals = new int[16];
-        private int size;
-
-        boolean isEmpty() {
-            return this.size == 0;
-        }
-
-        double key() {
-            return this.keys[0];
-        }
-
-        int value() {
-            return this.vals[0];
-        }
-
-        void add(double d, int n) {
-            if (this.size == this.keys.length) {
-                this.grow();
-            }
-            this.siftUp(this.size, d, n);
-            ++this.size;
-        }
-
-        void pop() {
-            int n = this.size - 1;
-            this.size = n;
-            if (n == 0) {
-                return;
-            }
-            this.siftDown(0, this.keys[n], this.vals[n]);
-        }
-
-        private void grow() {
-            int n = this.keys.length < 64 ? this.keys.length + 2 : this.keys.length + (this.keys.length >> 1);
-            this.keys = Arrays.copyOf(this.keys, n);
-            this.vals = Arrays.copyOf(this.vals, n);
-        }
-
-        private void siftUp(int n, double d, int n2) {
-            while (n > 0) {
-                int n3 = n - 1 >>> 1;
-                double d2 = this.keys[n3];
-                if (Double.compare(d, d2) >= 0) break;
-                this.keys[n] = d2;
-                this.vals[n] = this.vals[n3];
-                n = n3;
-            }
-            this.keys[n] = d;
-            this.vals[n] = n2;
-        }
-
-        private void siftDown(int n, double d, int n2) {
-            int n3 = this.size >>> 1;
-            while (n < n3) {
-                int n4 = (n << 1) + 1;
-                double d2 = this.keys[n4];
-                int n5 = this.vals[n4];
-                int n6 = n4 + 1;
-                if (n6 < this.size && Double.compare(d2, this.keys[n6]) > 0) {
-                    d2 = this.keys[n6];
-                    n5 = this.vals[n6];
-                    n4 = n6;
-                }
-                if (Double.compare(d, d2) <= 0) break;
-                this.keys[n] = d2;
-                this.vals[n] = n5;
-                n = n4;
-            }
-            this.keys[n] = d;
-            this.vals[n] = n2;
-        }
-    }
 
 }
 
