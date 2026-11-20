@@ -1,4 +1,4 @@
-"""复现原生产进度组件和缓存的边界，不启动Minecraft，也不测游戏性能。"""
+"""验证修复后的生产会话和缓存边界；历史缺陷输出保留在docs/evidence。"""
 
 import hashlib
 import json
@@ -18,6 +18,7 @@ public final class RiverEngine {}
 """
 
 PROBE = """
+package dev.streamsreflowing.compat.streamscontrol;
 import dev.streamsreflowing.core.RiverEngine;
 import dev.streamsreflowing.core.compose.ColumnPlan;
 import dev.streamsreflowing.worldgen.ChunkPlanCache;
@@ -28,25 +29,26 @@ public final class StartupCacheProbe {
         RiverEngine engine = new RiverEngine();
         int diagonal = retained(engine, true);
         int horizontal = retained(engine, false);
-        if (diagonal != 1 || horizontal != 32)
-            throw new AssertionError("缓存实现已改变，需要重新审查探针预期");
+        if (diagonal != 32 || horizontal != 32)
+            throw new AssertionError("缓存未保留完整容量");
         System.out.println("CACHE diagonal_retained=" + diagonal
                 + " horizontal_retained=" + horizontal + " inserted=32");
-        StreamsStartupProgress.begin(1000, 0, 7);
-        StreamsStartupProgress.clear();
-        StreamsStartupProgress.begin(20, 0, 7);
+        var old = new RiverStartupSession(() -> {}, () -> {});
+        old.enter(); old.progress(1000, 0, 7); old.close();
+        var fresh = new RiverStartupSession(() -> {}, () -> {});
+        fresh.enter(); fresh.progress(20, 0, 7);
         // 模拟旧回调的相同调用次序；不声称已复现真实世界切换的线程时序。
-        StreamsStartupProgress.setCompleted(100);
+        old.completedOne();
         var update = StreamsStartupProgress.snapshot();
-        if (!update.active() || update.completedPlates() != 20)
-            throw new AssertionError("进度实现已改变，需要重新审查探针预期");
-        StreamsStartupProgress.finish();
+        if (!update.active() || update.completedPlates() != 0)
+            throw new AssertionError("旧回调污染新进度");
+        old.finish(true);
         var finish = StreamsStartupProgress.snapshot();
-        if (finish.active() || finish.completedPlates() != 20)
-            throw new AssertionError("结案实现已改变，需要重新审查探针预期");
+        if (!finish.active() || finish.completedPlates() != 0)
+            throw new AssertionError("旧结案提前结束新进度");
         System.out.println("PROGRESS stale_update_completed=" + update.completedPlates()
                 + " stale_finish_active=" + finish.active() + " new_session_total=20");
-        StreamsStartupProgress.clear();
+        fresh.close();
     }
 
     private static int retained(RiverEngine engine, boolean diagonal) {
@@ -70,7 +72,9 @@ def main():
     relative_sources = [
         "dev/streamsreflowing/core/compose/ColumnPlan.java",
         "dev/streamsreflowing/worldgen/ChunkPlanCache.java",
+        "dev/streamsreflowing/worldgen/BoundedPlanTable.java",
         "dev/streamsreflowing/compat/streamscontrol/StreamsStartupProgress.java",
+        "dev/streamsreflowing/compat/streamscontrol/RiverStartupSession.java",
     ]
     output_dir = ROOT / "build/reviews"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -91,7 +95,8 @@ def main():
             check=True, capture_output=True,
         )
         result = subprocess.run(
-            [str(JAVA_HOME / "bin/java.exe"), "-cp", str(classes), "StartupCacheProbe"],
+            [str(JAVA_HOME / "bin/java.exe"), "-cp", str(classes),
+             "dev.streamsreflowing.compat.streamscontrol.StartupCacheProbe"],
             check=True, capture_output=True, text=True,
         )
     evidence = {
@@ -105,7 +110,7 @@ def main():
         "production_mutations": 0,
     }
     serialized = json.dumps(evidence, ensure_ascii=False, indent=2) + "\n"
-    (output_dir / "startup-cache-probe.json").write_text(serialized, encoding="utf-8")
+    (output_dir / "startup-cache-probe.json").write_text(serialized, encoding="utf-8", newline="\n")
     print(serialized, end="")
 
 

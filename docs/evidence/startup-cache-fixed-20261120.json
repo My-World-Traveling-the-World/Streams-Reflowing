@@ -1,0 +1,16 @@
+{
+  "scope": "production components with an empty RiverEngine type stub; no Minecraft runtime or performance claim",
+  "stdout": [
+    "CACHE diagonal_retained=32 horizontal_retained=32 inserted=32",
+    "PROGRESS stale_update_completed=0 stale_finish_active=true new_session_total=20"
+  ],
+  "source_sha256": {
+    "dev/streamsreflowing/core/compose/ColumnPlan.java": "c473e6b14c2ea3e1e87e6ede363cd029f92f869b01092e873c0054f1e6c26b6c",
+    "dev/streamsreflowing/worldgen/ChunkPlanCache.java": "38c0031645c5ebf9358cdfa95a26fa4cd4408a17f2708d368dd9b88b7cdce90e",
+    "dev/streamsreflowing/worldgen/BoundedPlanTable.java": "f9fe558f6ca73047df9840d67a54df4a302aa9d7f5580c9a049af510dc4015b2",
+    "dev/streamsreflowing/compat/streamscontrol/StreamsStartupProgress.java": "e251c1111d55f8a33d3c2d702d0ca5886b705ad72aee3b1594b74f24bda1a402",
+    "dev/streamsreflowing/compat/streamscontrol/RiverStartupSession.java": "60c7ae9cbe2f3d17485b21c55a60dfb0759e7fa7519ec2ebaa233410d257536f"
+  },
+  "new_junit_tests": 0,
+  "production_mutations": 0
+}

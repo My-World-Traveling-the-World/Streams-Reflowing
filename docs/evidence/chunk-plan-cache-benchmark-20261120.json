@@ -1,0 +1,13 @@
+{
+  "baseline": "7417352",
+  "scope": "isolated production cache; empty engine type; no real plan cost or game speed claim",
+  "operations_per_sample": 1048576,
+  "warmups": 3,
+  "alternating_samples": 9,
+  "old_source_sha256": "e0b4b82af42b7f7aefe4d9977e2e454479445f8d58d82de5c787b8498b7d0316",
+  "stdout": [
+    "QUERY horizontal 0 0 [3934500, 3918500, 4005900, 4003600, 4018100, 3918700, 3959800, 3945500, 3938500] [5699900, 5445100, 5446900, 5435300, 5413900, 5426400, 5470600, 5618300, 5622600]",
+    "QUERY diagonal 31 0 [4222400, 4224600, 4265800, 4405500, 4078500, 4205700, 4255500, 3997500, 3959400] [6847800, 7183100, 6784600, 6778000, 6745900, 6846500, 6814700, 6775900, 6755900]",
+    "RING_BYTES 608 1096"
+  ]
+}
