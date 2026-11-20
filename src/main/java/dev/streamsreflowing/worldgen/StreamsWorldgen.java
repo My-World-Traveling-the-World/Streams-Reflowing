@@ -1219,35 +1219,13 @@ public final class StreamsWorldgen {
             int n9 = Services.PLATFORM.gridSpacing();
             RiverEngine riverEngine2 = new RiverEngine(l, StreamsConfig.defaults(n9, Services.PLATFORM.widthScale(), Services.PLATFORM.plateScale(), Services.PLATFORM.terrainSampleSpacing(), Services.PLATFORM.valleySnapRadius()).withMinRiverAccumulation(6.0).withWetnessMultiplier(Services.PLATFORM.wetnessMultiplier()).withWetnessDryFloor(Services.PLATFORM.wetnessDryFloor()).withLakeArea(Services.PLATFORM.generateLakes() ? Services.PLATFORM.lakeMinArea() : Double.MAX_VALUE, Services.PLATFORM.lakeMaxArea()).withMinSeaChainNodes(Services.PLATFORM.minStreamLength() / n9).withOutletBiomes(Services.PLATFORM.outletBiomes()).withConnect(Services.PLATFORM.connectNearbyWater(), Services.PLATFORM.connectRadius()).withSinkRooted(Services.PLATFORM.sinkRooted()).withGrowDensity(Services.PLATFORM.growDensity()).withConfineToBanks(Services.PLATFORM.confineToBanks()).withContainmentBerm(Services.PLATFORM.containmentBerm()).withAppearance(Services.PLATFORM.meanderStrength(), Services.PLATFORM.baseWidth(), Services.PLATFORM.maxWidth(), Services.PLATFORM.streamDepth()).withBankNoise(Services.PLATFORM.bankNoise()), cachingTerrainSampler, wetnessSampler);
             if (System.getProperty("streamsreflowing.benchcalls") != null) {
-                RiverFlowField.BiomeClass biomeClass2 = RiverFlowFields.classifierFor(serverLevel);
-                TerrainSampler terrainSampler6 = fastCal.estimator();
-                Random random = new Random(20260810L);
-                int path = 1000;
-                int[] d3 = new int[path];
-                int[] nArray = new int[path];
-                d2 = 0.0;
-                for (int string = 1; string <= 2; ++string) {
-                    for (int i = 0; i < path; ++i) {
-                        d3[i] = random.nextInt(8192) - 4096;
-                        nArray[i] = random.nextInt(8192) - 4096;
-                    }
-                    long j = System.nanoTime();
-                    if (terrainSampler6 != null) {
-                        for (int i = 0; i < path; ++i) {
-                            d2 += terrainSampler6.height(d3[i], nArray[i]);
-                        }
-                    }
-                    j = System.nanoTime();
-                    for (int i = 0; i < path; ++i) {
-                        d2 += (double)chunkGenerator.getBaseHeight(d3[i], nArray[i], Heightmap.Types.OCEAN_FLOOR_WG, serverLevel, randomState);
-                    }
-                    j = System.nanoTime();
-                    for (int i = 0; i < path; ++i) {
-                        d2 += (double)biomeClass2.classify(d3[i], nArray[i]);
-                    }
-                    j = System.nanoTime();
-                    Constants.LOG.info("[SR-BENCH] pass {} ({}), {} calls each: IR estimate {} | getBaseHeight {} ms ({} us/call) | biome classify {} ms ({} us/call) [sink {}]", string, string == 1 ? "cold" : "warm", path, terrainSampler6 != null ? String.format(Locale.ROOT, "%.1f ms (%.2f us/call)", (double)(j - j) / 1000000.0, (double)(j - j) / 1000.0 / (double)path) : "n/a (no calibrated evaluator for this router)", String.format(Locale.ROOT, "%.1f", (double)(j - j) / 1000000.0), String.format(Locale.ROOT, "%.2f", (double)(j - j) / 1000.0 / (double)path), String.format(Locale.ROOT, "%.1f", (double)(j - j) / 1000000.0), String.format(Locale.ROOT, "%.2f", (double)(j - j) / 1000.0 / (double)path), (long)d2);
-                }
+                var classifier = RiverFlowFields.classifierFor(serverLevel);
+                var estimator = fastCal.estimator();
+                // 诊断沿用原两批坐标及读取顺序；计时与输出迁出，避免局部变量复用产生恒零。
+                TerrainCallBenchmark.run(estimator == null ? null : estimator::height,
+                        (x, z) -> chunkGenerator.getBaseHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG,
+                                serverLevel, randomState),
+                        (x, z) -> classifier.classify(x, z));
             }
             riverEngine2.setBuildListener((plateKey, n2, n3, d, n4) -> {
                 int n10 = n2 + n3;

@@ -1,0 +1,15 @@
+{
+  "base": "f139b6e",
+  "original_source_sha256": "41465c565a8a12dbc0dcaf46c42612c9780ead5a4835f2bce6143161090dd930",
+  "scope": "real original StreamsWorldgen bytecode; six self-subtracted local long timers; not a world launch",
+  "original_assertion_failures": 1,
+  "original_errors": 0,
+  "original_message": "org.opentest4j.AssertionFailedError: \u540c\u4e00long\u5c40\u90e8\u53d8\u91cf\u76f8\u51cf\u6052\u4e3a\u96f6\uff0c\u4e0d\u80fd\u4f5c\u4e3a\u5b9e\u6d4b\u8017\u65f6 ==> expected: <0> but was: <6>",
+  "final_junit": {
+    "tests": 77,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "log": "build/round43-final.log"
+}
