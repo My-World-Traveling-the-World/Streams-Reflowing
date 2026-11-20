@@ -175,7 +175,7 @@ public final class NetworkTracer {
         int n30 = lowResGrid.size();
         int n31 = streamsConfig.seaLevel();
         boolean[] blArray = new boolean[n30];
-        boolean[] blArrayCellScratch = new boolean[n30];
+        TouchedCellMask blArrayCellScratch = new TouchedCellMask(n30);
         ArrayDeque<Integer> arrayDeque = new ArrayDeque<Integer>();
         for (n29 = 0; n29 < n30; ++n29) {
             if (!lowResGrid.inDomain(n29) || lowResGrid.height(n29) == -1000.0) continue;
@@ -2468,7 +2468,7 @@ public final class NetworkTracer {
         return d6;
     }
 
-    private static Lake a(List<Integer> list, int n4, TerrainSampler terrainSampler, LowResGrid lowResGrid, PlateDomain plateDomain, double d, double[] dArray, boolean[] blArrayScratch) {
+    private static Lake a(List<Integer> list, int n4, TerrainSampler terrainSampler, LowResGrid lowResGrid, PlateDomain plateDomain, double d, double[] dArray, TouchedCellMask blArrayScratch) {
         // 只搬算法边界，调用方、共享掩码和诊断归属保持原样。
         return FineLakeRefiner.refine(list, n4, terrainSampler, lowResGrid, plateDomain, d, dArray, blArrayScratch, X.get());
     }

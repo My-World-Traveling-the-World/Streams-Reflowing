@@ -54,10 +54,10 @@ class FineLakeRefinerTest {
         var sampler = bowl(96, 96, 25);
         var grid = grid(sampler);
         var stage = NetworkTracer.class.getDeclaredMethod("a", List.class, int.class, TerrainSampler.class,
-                LowResGrid.class, PlateDomain.class, double.class, double[].class, boolean[].class);
+                LowResGrid.class, PlateDomain.class, double.class, double[].class, TouchedCellMask.class);
         stage.setAccessible(true);
         Lake actual = (Lake) stage.invoke(null, cells(grid, 96, 96, 25), 60, sampler, grid, DOMAIN, 0,
-                new double[2], new boolean[grid.size()]);
+                new double[2], new TouchedCellMask(grid.size()));
         assertNotNull(actual);
         assertTrue(actual.covers(96, 96));
     }
@@ -84,7 +84,7 @@ class FineLakeRefinerTest {
         Lake expected = FrozenFineLakeRefiner.refine(cells, level, sampler, grid, DOMAIN, margin,
                 oldStats, new boolean[grid.size()], new long[8]);
         Lake actual = FineLakeRefiner.refine(cells, level, sampler, grid, DOMAIN, margin,
-                newStats, new boolean[grid.size()], new long[8]);
+                newStats, new TouchedCellMask(grid.size()), new long[8]);
         assertArrayEquals(oldStats, newStats);
         if (expected == null) assertNull(actual);
         else {

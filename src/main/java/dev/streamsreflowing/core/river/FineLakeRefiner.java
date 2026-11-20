@@ -28,7 +28,15 @@ final class FineLakeRefiner {
         return true;
     }
 
-    static Lake refine(List<Integer> list, int n4, TerrainSampler terrainSampler, LowResGrid lowResGrid, PlateDomain plateDomain, double d, double[] dArray, boolean[] blArrayScratch, long[] timings) {
+    static Lake refine(List<Integer> list, int n4, TerrainSampler terrainSampler, LowResGrid lowResGrid, PlateDomain plateDomain, double d, double[] dArray, TouchedCellMask scratch, long[] timings) {
+        TouchedCellMask owned = scratch != null ? scratch : new TouchedCellMask(lowResGrid.size());
+        // 所有提前拒绝与采样异常都走归还，不能让下一候选继承旧成员关系。
+        try (var lease = owned.prepare(list)) {
+            return refineMarked(list, n4, terrainSampler, lowResGrid, plateDomain, d, dArray, lease.cells(), timings);
+        }
+    }
+
+    private static Lake refineMarked(List<Integer> list, int n4, TerrainSampler terrainSampler, LowResGrid lowResGrid, PlateDomain plateDomain, double d, double[] dArray, boolean[] blArray, long[] timings) {
         int n5;
         int n6;
         int n7;
@@ -46,11 +54,6 @@ final class FineLakeRefiner {
         int n19 = Integer.MAX_VALUE;
         int n20 = Integer.MIN_VALUE;
         int n21 = Integer.MIN_VALUE;
-        boolean[] blArray = blArrayScratch != null && blArrayScratch.length >= lowResGrid.size() ? blArrayScratch : new boolean[lowResGrid.size()];
-        Arrays.fill(blArray, 0, lowResGrid.size(), false);
-        for (int n144 : list) {
-            blArray[n144] = true;
-        }
         for (int n144 : list) {
             n13 = lowResGrid.worldX(lowResGrid.gi(n144));
             n12 = lowResGrid.worldZ(lowResGrid.gj(n144));
