@@ -261,7 +261,8 @@ public final class StreamsPrewarmService {
                     for (PlateRef plate : plates) activeCoverage.add(plate.key());
                 }
                 Long previous = state.playerCenters.get(player.getUUID());
-                if (previous != null && chebyshevDistance(previous, center) < config.runtimeStrideChunks()) {
+                boolean retryDue = plates.stream().anyMatch(plate -> state.runtimeWork.retryDue(plate.key()));
+                if (!retryDue && previous != null && chebyshevDistance(previous, center) < config.runtimeStrideChunks()) {
                     continue;
                 }
                 state.playerCenters.put(player.getUUID(), center);
@@ -291,6 +292,7 @@ public final class StreamsPrewarmService {
                 if (saturated) state.playerCenters.remove(player.getUUID(), center);
             }
             StreamsSamplerModeController.ensureRuntimePlateCacheCapacity(activeCoverage.size());
+            state.runtimeWork.retainCoverage(activeCoverage);
             state.playerCenters.keySet().removeIf(uuid -> !isOnline(level, uuid));
             if (scheduled > 0) {
                 LOGGER.info("Streams runtime prewarm queued {} plate(s); queue={}, active={}, radius={} chunks.",
@@ -310,6 +312,7 @@ public final class StreamsPrewarmService {
             state.closed = true;
             state.startup.stop();
             state.startupWork.close();
+            state.runtimeWork.close();
         }
         StreamsGpuTerrainSampler.close(level);
     }
@@ -331,31 +334,27 @@ public final class StreamsPrewarmService {
     }
 
     private static int scheduleRuntime(WorldState state, EngineContext context, Object plate) {
-        if (state.closed || state.pendingPlates.putIfAbsent(plate, Boolean.TRUE) != null) return 0;
-        if (StreamsSamplerModeController.isChunkyExclusive()) {
-            state.pendingPlates.remove(plate);
-            return 0;
-        }
-        try {
-            RUNTIME_EXECUTOR.execute(() -> {
-                try {
-                    if (!StreamsRuntimeLoadPolicy.awaitPermit()) return;
-                    // 保存窗口避让:写盘期间退让,保存完再 build,避免边写边改
-                    // 放大脏 chunk 量。Chunky 抢占或线程中断时直接退出。
-                    while (isSaving() && !Thread.currentThread().isInterrupted()) {
-                        LockSupport.parkNanos(StreamsRuntimeLoadPolicy.pauseNanos());
-                        if (!StreamsRuntimeLoadPolicy.awaitPermit()) return;
-                    }
-                    if (!state.closed && !isReady(context, plate)) build(context, plate);
-                } finally {
-                    state.pendingPlates.remove(plate);
+        if (state.closed) return 0;
+        return state.runtimeWork.submit(plate, RUNTIME_EXECUTOR, new RuntimePrewarmQueue.Access<>() {
+            @Override public boolean permit() {
+                if (!StreamsRuntimeLoadPolicy.awaitPermit(() -> !state.closed)) return false;
+                // 保存避让仍保留，但关闭会话也必须能终止这一层等待。
+                while (!state.closed && isSaving() && !Thread.currentThread().isInterrupted()) {
+                    LockSupport.parkNanos(StreamsRuntimeLoadPolicy.pauseNanos());
+                    if (!StreamsRuntimeLoadPolicy.awaitPermit(() -> !state.closed)) return false;
                 }
-            });
-            return 1;
-        } catch (RejectedExecutionException full) {
-            state.pendingPlates.remove(plate);
-            return -1;
-        }
+                return !state.closed && !Thread.currentThread().isInterrupted();
+            }
+            @Override public boolean ready(Object key) { return isReady(context, key); }
+            @Override public void build(Object key) { StreamsPrewarmService.build(context, key); }
+            @Override public void retry(Object key, RuntimePrewarmQueue.Reason reason,
+                                        int attempt, long delayNanos, Throwable failure) {
+                state.playerCenters.clear();
+                LOGGER.warn("【河流运行期预热延后重试】 plate={} reason={} attempt={} delayMs={} failure={}",
+                        key, reason, attempt, TimeUnit.NANOSECONDS.toMillis(delayNanos),
+                        failure == null ? "none" : unwrap(failure).toString());
+            }
+        });
     }
 
     private static void refreshRuntimeCapacity() {
@@ -628,7 +627,8 @@ public final class StreamsPrewarmService {
 
     private static final class WorldState {
         private final Map<UUID, Long> playerCenters = new ConcurrentHashMap<>();
-        private final ConcurrentHashMap<Object, Boolean> pendingPlates = new ConcurrentHashMap<>();
+        private final RuntimePrewarmQueue<Object> runtimeWork =
+                new RuntimePrewarmQueue<>(RUNTIME_QUEUE_CAPACITY, System::nanoTime);
         private final RiverStartupReadiness startup = new RiverStartupReadiness();
         private final RiverStartupSession startupWork = new RiverStartupSession(
                 StreamsSamplerModeController::enterInitialGeneration,

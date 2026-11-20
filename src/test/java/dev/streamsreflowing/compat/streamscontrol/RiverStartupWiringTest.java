@@ -38,4 +38,15 @@ class RiverStartupWiringTest {
         assertFalse(source.contains("StreamsStartupProgress.finish();"));
         assertFalse(source.contains("startupFuture"));
     }
+
+    @Test void runtimeRetryBypassesUnchangedCenterAndStopsWithWorld() throws Exception {
+        String source = Files.readString(MAIN.resolve("compat/streamscontrol/StreamsPrewarmService.java"));
+        // 行为测试走生产队列；另守正式扫描没有绕开重试与停止端口。
+        assertTrue(source.contains("boolean retryDue = plates.stream().anyMatch(plate -> state.runtimeWork.retryDue(plate.key()));"));
+        assertTrue(source.contains("if (!retryDue && previous != null"));
+        assertTrue(source.contains("state.runtimeWork.submit(plate, RUNTIME_EXECUTOR,"));
+        assertTrue(source.contains("state.runtimeWork.close();"));
+        assertTrue(source.contains("state.runtimeWork.retainCoverage(activeCoverage);"));
+        assertTrue(source.contains("state.playerCenters.clear();"));
+    }
 }

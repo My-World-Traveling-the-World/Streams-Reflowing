@@ -1,0 +1,51 @@
+[
+  {
+    "name": "retry-lost",
+    "file": "src/main/java/dev/streamsreflowing/compat/streamscontrol/RuntimePrewarmQueue.java",
+    "junit_failures": 5,
+    "scope": "production worker behavior",
+    "restored": true
+  },
+  {
+    "name": "duplicate-owner",
+    "file": "src/main/java/dev/streamsreflowing/compat/streamscontrol/RuntimePrewarmQueue.java",
+    "junit_failures": 1,
+    "scope": "production worker behavior",
+    "restored": true
+  },
+  {
+    "name": "backoff-ignored",
+    "file": "src/main/java/dev/streamsreflowing/compat/streamscontrol/RuntimePrewarmQueue.java",
+    "junit_failures": 1,
+    "scope": "production worker behavior",
+    "restored": true
+  },
+  {
+    "name": "stop-ignored",
+    "file": "src/main/java/dev/streamsreflowing/compat/streamscontrol/RuntimePrewarmQueue.java",
+    "junit_failures": 1,
+    "scope": "production worker behavior",
+    "restored": true
+  },
+  {
+    "name": "backoff-cap",
+    "file": "src/main/java/dev/streamsreflowing/compat/streamscontrol/RuntimePrewarmQueue.java",
+    "junit_failures": 1,
+    "scope": "production worker behavior",
+    "restored": true
+  },
+  {
+    "name": "coverage-retained",
+    "file": "src/main/java/dev/streamsreflowing/compat/streamscontrol/RuntimePrewarmQueue.java",
+    "junit_failures": 1,
+    "scope": "production worker behavior",
+    "restored": true
+  },
+  {
+    "name": "center-bypass",
+    "file": "src/main/java/dev/streamsreflowing/compat/streamscontrol/StreamsPrewarmService.java",
+    "junit_failures": 1,
+    "scope": "static wiring",
+    "restored": true
+  }
+]

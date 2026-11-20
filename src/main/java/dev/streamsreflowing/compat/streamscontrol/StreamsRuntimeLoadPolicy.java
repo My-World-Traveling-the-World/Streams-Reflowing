@@ -88,12 +88,17 @@ final class StreamsRuntimeLoadPolicy {
     }
 
     static boolean awaitPermit() {
+        return awaitPermit(() -> true);
+    }
+
+    /** 世界已经关闭时及时退出压力等待，不让旧工作持续占住运行期线程。 */
+    static boolean awaitPermit(java.util.function.BooleanSupplier alive) {
         if (StreamsSamplerModeController.isChunkyExclusive() || chunkyActive()) return false;
-        while (recommendedThreads() <= 0 && !Thread.currentThread().isInterrupted()) {
+        while (alive.getAsBoolean() && recommendedThreads() <= 0 && !Thread.currentThread().isInterrupted()) {
             if (StreamsSamplerModeController.isChunkyExclusive() || chunkyActive()) return false;
             LockSupport.parkNanos(PAUSE_NANOS);
         }
-        return !Thread.currentThread().isInterrupted();
+        return alive.getAsBoolean() && !Thread.currentThread().isInterrupted();
     }
 
     // ── 注册表查询（全部容错：单个 provider 抛异常只跳过它）──────────────
