@@ -1,0 +1,38 @@
+[
+  {
+    "name": "duplicates-kept",
+    "assertion_failures": 3,
+    "tests": 8,
+    "errors": 0,
+    "skipped": 0,
+    "file": "src/main/java/dev/streamsreflowing/core/river/RiverCandidateCollector.java",
+    "restored_sha256": "39034f596508898e6248ff8787cb7db165650a4917c86c7d79253d9f66194460"
+  },
+  {
+    "name": "candidates-dropped",
+    "assertion_failures": 7,
+    "tests": 8,
+    "errors": 0,
+    "skipped": 0,
+    "file": "src/main/java/dev/streamsreflowing/core/river/RiverCandidateCollector.java",
+    "restored_sha256": "39034f596508898e6248ff8787cb7db165650a4917c86c7d79253d9f66194460"
+  },
+  {
+    "name": "epoch-not-advanced",
+    "assertion_failures": 5,
+    "tests": 8,
+    "errors": 0,
+    "skipped": 0,
+    "file": "src/main/java/dev/streamsreflowing/core/river/RiverCandidateCollector.java",
+    "restored_sha256": "39034f596508898e6248ff8787cb7db165650a4917c86c7d79253d9f66194460"
+  },
+  {
+    "name": "wrap-stale",
+    "assertion_failures": 1,
+    "tests": 8,
+    "errors": 0,
+    "skipped": 0,
+    "file": "src/main/java/dev/streamsreflowing/core/river/RiverCandidateCollector.java",
+    "restored_sha256": "39034f596508898e6248ff8787cb7db165650a4917c86c7d79253d9f66194460"
+  }
+]

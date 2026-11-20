@@ -53,7 +53,7 @@ public final class NearestRiverIndex {
     });
     private static final ThreadLocal<int[]> B = ThreadLocal.withInitial(() -> new int[1]);
     private static final ThreadLocal<long[]> C = ThreadLocal.withInitial(() -> new long[1]);
-    private static final ThreadLocal<int[][]> D = ThreadLocal.withInitial(() -> new int[][]{new int[512]});
+    private static final ThreadLocal<RiverCandidateCollector> D = ThreadLocal.withInitial(RiverCandidateCollector::new);
 
     public NearestRiverIndex(List<RiverSegment> list, double d, int n, double d2) {
         int n2;
@@ -428,11 +428,13 @@ public final class NearestRiverIndex {
             if (d4.a != this || d4.b != l2 || d4.c != d3) continue;
             return d4.d;
         }
+        // 一条河段可跨多个桶；先去重，避免重复计算相同投影及大半径重复数组。
+        RiverCandidateCollector collector = D.get();
+        collector.begin(this.f.size());
         long[] lArray = C.get();
         if (lArray[0] != (l = l2 * 31L + Double.doubleToLongBits(d3) + (long)System.identityHashCode(this))) {
             lArray[0] = l;
-            int[] nArray2 = D.get()[0];
-            int n6 = 0;
+
             int n7 = this.a(d - d3);
             int n8 = this.a(d + d3);
             int n9 = this.b(d2 - d3);
@@ -447,22 +449,10 @@ public final class NearestRiverIndex {
                     int n19 = this.ab[n18];
                     int n20 = this.ab[n18 + 1];
                     if (n19 == n20) continue;
-                    if (n6 + (n20 - n19) + 1 > nArray2.length) {
-                        int[] nArray4 = Arrays.copyOf(nArray2, Math.max(nArray2.length * 2, n6 + (n20 - n19) + 1));
-                        nArray2 = nArray4;
-                        NearestRiverIndex.D.get()[0] = nArray4;
-                    }
-                    System.arraycopy(this.aa, n19, nArray2, n6, n20 - n19);
-                    n6 += n20 - n19;
+                    collector.addRange(this.aa, n19, n20);
                 }
             }
-            if (n6 + 1 > nArray2.length) {
-                int[] nArray5 = Arrays.copyOf(nArray2, n6 + 1);
-                nArray2 = nArray5;
-                NearestRiverIndex.D.get()[0] = nArray5;
-            }
-            nArray2[n6] = -1;
-            return nArray2;
+            return collector.scratch();
         }
         double d4 = (double)n4 * 16.0;
         double d5 = (double)n5 * 16.0;
@@ -470,41 +460,18 @@ public final class NearestRiverIndex {
         int n12 = this.a(d4 + 16.0 + d3);
         int n13 = this.b(d5 - d3);
         int n14 = this.b(d5 + 16.0 + d3);
-        int n15 = 0;
-        for (int i = n11; i <= n12; ++i) {
-            int n16 = i - this.ac;
-            if (n16 < 0 || n16 >= this.ae) continue;
-            for (n3 = n13; n3 <= n14; ++n3) {
-                int n17 = n3 - this.ad;
-                if (n17 < 0 || n17 >= this.af) continue;
-                int n18 = n16 + this.ae * n17;
-                n15 += this.ab[n18 + 1] - this.ab[n18];
+        // 热缓存只排序唯一河段：从M个桶条目排序改为M次位集判定加U个唯一项排序。
+        for (int cx = n11; cx <= n12; cx++) {
+            int ix = cx - this.ac;
+            if (ix < 0 || ix >= this.ae) continue;
+            for (int cz = n13; cz <= n14; cz++) {
+                int iz = cz - this.ad;
+                if (iz < 0 || iz >= this.af) continue;
+                int bucket = ix + this.ae * iz;
+                collector.addRange(this.aa, this.ab[bucket], this.ab[bucket + 1]);
             }
         }
-        int[] nArray7 = new int[n15];
-        n3 = 0;
-        for (n2 = n11; n2 <= n12; ++n2) {
-            int n16 = n2 - this.ac;
-            if (n16 < 0 || n16 >= this.ae) continue;
-            for (n = n13; n <= n14; ++n) {
-                int n17 = n - this.ad;
-                if (n17 < 0 || n17 >= this.af) continue;
-                int n18 = n16 + this.ae * n17;
-                int n19 = this.ab[n18];
-                int n20 = this.ab[n18 + 1];
-                if (n19 == n20) continue;
-                System.arraycopy(this.aa, n19, nArray7, n3, n20 - n19);
-                n3 += n20 - n19;
-            }
-        }
-        Arrays.sort(nArray7);
-        n2 = 0;
-        for (n = 0; n < nArray7.length; ++n) {
-            if (n != 0 && nArray7[n] == nArray7[n - 1]) continue;
-            nArray7[n2++] = nArray7[n];
-        }
-        int[] nArray8 = Arrays.copyOf(nArray7, n2 + 1);
-        nArray8[n2] = -1;
+        int[] nArray8 = collector.sortedCopy();
         nArray = B.get();
         TieredCand tieredCand = tieredCandArray[nArray[0]];
         nArray[0] = nArray[0] + 1 & 63;
