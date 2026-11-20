@@ -19,6 +19,8 @@
 
 四组都正常编译，4项完整执行、errors/skipped0；精确checkout逐字恢复后63项全通过。证据docs/evidence/river-primitives-{extraction,mutations}-20261120.json含原源SHA和恢复SHA，冻结oracle不调用新阶段。
 
+最终成品再次运行tools/review/plan_contract_probe.py，两端10个公开类签名一致、同一消费者字节码均CONTRACT_PASS；证据docs/evidence/plan-api-artifacts-final-20261120.json。不覆盖真实Minecraft加载。
+
 ### 三、我没能验证什么
 
 未做整板真实河网或游戏同种子产物对照；PriorityQueue对拍证明本组件次序，不证明所有地形。remapJar仍有原BiomeColors三条映射告警，未把构建成功当全部Mixin运行时验证。没有FPS/MSPT或总预热耗时。
