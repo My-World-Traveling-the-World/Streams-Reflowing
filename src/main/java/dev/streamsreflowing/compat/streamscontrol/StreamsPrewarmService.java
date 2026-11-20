@@ -112,15 +112,13 @@ public final class StreamsPrewarmService {
         if (!isOverworld(level)) return;
         WorldState state = STATES.computeIfAbsent(level, ignored -> new WorldState());
         if (!state.startup.begin()) return;
-        boolean initialGenerationEntered = false;
         try {
             StreamsPrewarmConfig config = StreamsPrewarmConfig.reload();
             if (!config.enabled() || config.startupRadiusChunks() <= 0) {
                 state.startup.disabled();
                 return;
             }
-            StreamsSamplerModeController.enterInitialGeneration();
-            initialGenerationEntered = true;
+            state.startupWork.enter();
             EngineContext context = context(level);
             if (context == null) {
                 // 启用预热却没有引擎是失败，不能当成没有前置工作。
@@ -133,7 +131,7 @@ public final class StreamsPrewarmService {
             // 第一段：并行探测磁盘缓存。上一局预热完成时每块板都已增量落盘
             // （saves/<world>/streamsreflowing/<dim>/r.<cx>.<cz>.srn），这里把它们读回内存，
             // 既计入 alreadyReady，也不再进入第二段的 build —— 第二次进同一存档就是 0 次构建。
-            int[] states = primePlateStates(context, plates, executor);
+            int[] states = primePlateStates(context, plates, executor, state.startupWork);
             int ready = 0;
             int restoredFromDisk = 0;
             List<PlateRef> missing = new ArrayList<>();
@@ -155,19 +153,17 @@ public final class StreamsPrewarmService {
                     context.plateScale());
             // 全命中时不点亮进度卡片：没有要等的构建，UI 不该再弹。
             if (!missing.isEmpty()) {
-                StreamsStartupProgress.begin(plates.size(), alreadyReady, config.startupPlateWorkers());
+                state.startupWork.progress(plates.size(), alreadyReady, config.startupPlateWorkers());
             }
             long started = System.nanoTime();
-            AtomicInteger completed = new AtomicInteger(alreadyReady);
             int progressStep = Math.max(1, plates.size() / 10);
             List<CompletableFuture<Void>> futures = new ArrayList<>(missing.size());
             for (PlateRef plate : missing) {
-                CompletableFuture<Void> future = CompletableFuture.runAsync(
-                        () -> build(context, plate.key()), executor);
+                CompletableFuture<Void> future = state.startupWork.submit(
+                        executor, () -> build(context, plate.key()));
                 future.whenComplete((ignored, failure) -> {
-                    int done = completed.incrementAndGet();
-                    StreamsStartupProgress.setCompleted(done);
-                    if (done == plates.size() || done % progressStep == 0) {
+                    int done = state.startupWork.completedOne();
+                    if (done >= 0 && (done == plates.size() || done % progressStep == 0)) {
                         LOGGER.info("Streams startup prewarm progress: {}/{} plates, elapsedMs={}.",
                                 done, plates.size(), elapsedMillis(started));
                     }
@@ -177,8 +173,7 @@ public final class StreamsPrewarmService {
             CompletableFuture<Void> combined = CompletableFuture.allOf(
                     futures.toArray(new CompletableFuture[0]));
             state.startup.completeWhen(combined.whenComplete((ignored, failure) -> {
-                StreamsSamplerModeController.exitInitialGeneration();
-                StreamsStartupProgress.finish();
+                state.startupWork.finish(failure == null);
                 if (failure == null) {
                     LOGGER.info("Streams startup prewarm complete: radius={} chunks, plates={}, "
                                     + "alreadyReady={}, restoredFromDisk={}, built={}, elapsedMs={}.",
@@ -192,8 +187,7 @@ public final class StreamsPrewarmService {
         } catch (Throwable failure) {
             // 同步初始化与异步构建失败都必须留下结果，防止下游误报 ready。
             state.startup.failed();
-            if (initialGenerationEntered) StreamsSamplerModeController.exitInitialGeneration();
-            StreamsStartupProgress.clear();
+            state.startupWork.close();
             LOGGER.warn("Could not start Streams startup prewarm", unwrap(failure));
         }
     }
@@ -315,9 +309,9 @@ public final class StreamsPrewarmService {
         if (state != null) {
             state.closed = true;
             state.startup.stop();
+            state.startupWork.close();
         }
         StreamsGpuTerrainSampler.close(level);
-        StreamsStartupProgress.clear();
     }
 
     /**
@@ -499,19 +493,19 @@ public final class StreamsPrewarmService {
      * 绝不让它打断整轮启动预热。</p>
      */
     private static int[] primePlateStates(EngineContext context, List<PlateRef> plates,
-                                          ExecutorService executor) {
+                                          ExecutorService executor, RiverStartupSession session) {
         int[] states = new int[plates.size()];
         List<CompletableFuture<Void>> priming = new ArrayList<>(plates.size());
         for (int index = 0; index < plates.size(); index++) {
             int slot = index;
             Object key = plates.get(index).key();
-            priming.add(CompletableFuture.runAsync(() -> {
+            priming.add(session.submit(executor, () -> {
                 try {
                     states[slot] = plateState(context, key);
                 } catch (Throwable failure) {
                     states[slot] = 0;
                 }
-            }, executor));
+            }));
         }
         CompletableFuture.allOf(priming.toArray(new CompletableFuture[0])).join();
         return states;
@@ -636,6 +630,9 @@ public final class StreamsPrewarmService {
         private final Map<UUID, Long> playerCenters = new ConcurrentHashMap<>();
         private final ConcurrentHashMap<Object, Boolean> pendingPlates = new ConcurrentHashMap<>();
         private final RiverStartupReadiness startup = new RiverStartupReadiness();
+        private final RiverStartupSession startupWork = new RiverStartupSession(
+                StreamsSamplerModeController::enterInitialGeneration,
+                StreamsSamplerModeController::exitInitialGeneration);
         private volatile boolean closed;
     }
 

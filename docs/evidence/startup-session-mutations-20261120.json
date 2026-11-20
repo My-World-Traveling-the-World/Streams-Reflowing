@@ -1,0 +1,44 @@
+[
+  {
+    "name": "progress-owner",
+    "file": "src/main/java/dev/streamsreflowing/compat/streamscontrol/StreamsStartupProgress.java",
+    "junit_failures": 1,
+    "restored": true,
+    "scope": "production behavior"
+  },
+  {
+    "name": "finish-owner",
+    "file": "src/main/java/dev/streamsreflowing/compat/streamscontrol/StreamsStartupProgress.java",
+    "junit_failures": 1,
+    "restored": true,
+    "scope": "production behavior"
+  },
+  {
+    "name": "clear-owner",
+    "file": "src/main/java/dev/streamsreflowing/compat/streamscontrol/StreamsStartupProgress.java",
+    "junit_failures": 1,
+    "restored": true,
+    "scope": "production behavior"
+  },
+  {
+    "name": "queued-cancel",
+    "file": "src/main/java/dev/streamsreflowing/compat/streamscontrol/RiverStartupSession.java",
+    "junit_failures": 2,
+    "restored": true,
+    "scope": "production behavior"
+  },
+  {
+    "name": "release-once",
+    "file": "src/main/java/dev/streamsreflowing/compat/streamscontrol/RiverStartupSession.java",
+    "junit_failures": 2,
+    "restored": true,
+    "scope": "production behavior"
+  },
+  {
+    "name": "stop-wiring",
+    "file": "src/main/java/dev/streamsreflowing/compat/streamscontrol/StreamsPrewarmService.java",
+    "junit_failures": 1,
+    "restored": true,
+    "scope": "static wiring"
+  }
+]

@@ -29,6 +29,13 @@ class RiverStartupWiringTest {
         assertTrue(source.contains("state.startup.completeWhen(combined.whenComplete("));
         assertTrue(source.contains("state.startup.publishIfReady(() -> {"));
         assertTrue(source.contains("state.startup.stop();"));
+        // 结果门与进度租约是两个契约；只保护ready仍会留下旧任务污染新进度。
+        assertTrue(source.contains("state.startupWork.close();"));
+        assertTrue(source.contains("state.startup.stop();\n            state.startupWork.close();"));
+        assertTrue(source.contains("state.startupWork.submit("));
+        assertTrue(source.contains("session.submit(executor, () -> {"));
+        assertFalse(source.contains("StreamsStartupProgress.setCompleted("));
+        assertFalse(source.contains("StreamsStartupProgress.finish();"));
         assertFalse(source.contains("startupFuture"));
     }
 }

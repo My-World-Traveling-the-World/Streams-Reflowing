@@ -6,6 +6,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 public final class StreamsStartupProgress {
+    /** 进度属于发起它的会话；旧任务晚到只能处理旧数据。 */
+    private static Object owner;
     private static final AtomicBoolean ACTIVE = new AtomicBoolean();
     private static final AtomicInteger TOTAL_PLATES = new AtomicInteger();
     private static final AtomicInteger COMPLETED_PLATES = new AtomicInteger();
@@ -16,7 +18,12 @@ public final class StreamsStartupProgress {
     private StreamsStartupProgress() {
     }
 
-    public static void begin(int totalPlates, int alreadyReadyPlates, int buildWorkers) {
+    public static synchronized void begin(int totalPlates, int alreadyReadyPlates, int buildWorkers) {
+        begin(new Object(), totalPlates, alreadyReadyPlates, buildWorkers);
+    }
+
+    static synchronized void begin(Object session, int totalPlates, int alreadyReadyPlates, int buildWorkers) {
+        owner = session;
         TOTAL_PLATES.set(Math.max(0, totalPlates));
         COMPLETED_PLATES.set(Math.max(0, Math.min(totalPlates, alreadyReadyPlates)));
         ALREADY_READY_PLATES.set(Math.max(0, Math.min(totalPlates, alreadyReadyPlates)));
@@ -25,16 +32,29 @@ public final class StreamsStartupProgress {
         ACTIVE.set(totalPlates > 0);
     }
 
-    public static void setCompleted(int completedPlates) {
+    public static synchronized void setCompleted(int completedPlates) {
         COMPLETED_PLATES.set(Math.max(0, Math.min(TOTAL_PLATES.get(), completedPlates)));
     }
 
-    public static void finish() {
+    static synchronized void setCompleted(Object session, int completedPlates) {
+        if (owner == session) setCompleted(completedPlates);
+    }
+
+    public static synchronized void finish() {
         COMPLETED_PLATES.set(TOTAL_PLATES.get());
         ACTIVE.set(false);
     }
 
-    public static void clear() {
+    static synchronized void finish(Object session) {
+        if (owner == session) finish();
+    }
+
+    static synchronized void clear(Object session) {
+        if (owner == session) clear();
+    }
+
+    public static synchronized void clear() {
+        owner = null;
         ACTIVE.set(false);
         TOTAL_PLATES.set(0);
         COMPLETED_PLATES.set(0);
@@ -47,7 +67,7 @@ public final class StreamsStartupProgress {
         return ACTIVE.get();
     }
 
-    public static Snapshot snapshot() {
+    public static synchronized Snapshot snapshot() {
         int total = TOTAL_PLATES.get();
         int completed = Math.min(total, COMPLETED_PLATES.get());
         long startedAt = STARTED_AT_NANOS.get();
