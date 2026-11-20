@@ -1,5 +1,31 @@
 # 河流后续开发交接
 
+## 2026-11-20：三模组复查，进度归属与缓存冲突复现
+
+### 一、改了什么
+
+行为等价/审查基建：只新增`tools/review/startup_cache_probe.py`及`docs/evidence/startup-cache-probe-20261120.json`，没有改生产Java。完整联合复查在相邻`../roadweaver-next/docs/THREE-MOD-REVIEW-20261120.md`。探针直接编译原ChunkPlanCache、ColumnPlan及StreamsStartupProgress，只为空RiverEngine类型提供替身，不启动Minecraft。
+
+### 二、我验证了什么
+
+开工HEAD 82cc818干净；无remote，未虚构pull成功。外置Gradle9.4.1/JDK21/GBK执行test --rerun compileJava，BUILD SUCCESSFUL，XML合计20项，失败/错误/跳过0。相邻道路实际1753/0/0/0，长城实际982/0/0/0。原缓存同线程插入32个对角线区块只保留1个，横向保留32；A开始→清理→B开始20块→A旧更新让B显示20/20，A旧finish使B inactive。源码SHA256在证据中。生产回调没有owner检查，结果门已修的ready保护仍有效。
+
+### 三、我没能验证什么
+
+没有Minecraft退出重开时序、FPS/MSPT、预热总时长或4096工作集。没有完整ServerLevel运行期构建故障注入；源码确认异步失败/撤回后仅移除pending，玩家中心记录仍能跳过原地重试，但不声称世界最终丢河。没有动态复现采样模式跨会话泄漏。细湖掩码按触及单元清理尚未实现或计时。没有新守卫或生产变异，本轮探针不计入JUnit数量。
+
+### 四、遗留半截
+
+本轮只审查和复现，三个生产修复仍未做：启动进度/模式归属、失败后有界重试、ChunkPlanCache冲突替换。探针固定当前缺陷现象，修复时必须转换为正式正反测试，不能当作成功验收套件。河流仍无remote，不能push；没有部署成品。
+
+### 五、下一轮先做什么
+
+先在河流仓库迁出StartupSession和真实worker端口，钉住A停/B开/A回调、重复释放与取消，再修原地失败重试；随后量缓存冲突并对拍小型相联缓存。NetworkTracer仍4001非空非注释行，按洪泛/路由、细湖、河链和跨板阶段拆，保留浮点与同权次序。
+
+### 六、踩到的坑
+
+旧TASKS/OPTIMIZATION多项已实现，不能重新计算收益或照搬线程数倍数。Java源解析应先识别字符串再去注释，避免中文日志内容误判。探针首次沙箱TemporaryDirectory写入被拒，按权限流程升级后原脚本运行成功；没有把沙箱失败算作组件故障。缓存完整键/engine比较正确，此处是命中容量问题，不是错命中。
+
 ## 2026-11-16：启动预热结果与就绪发布
 
 ### 一、改了什么
