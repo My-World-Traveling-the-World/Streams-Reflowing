@@ -1,0 +1,63 @@
+{
+  "mutations": [
+    {
+      "id": "S1",
+      "repo": "streams-reflowing-src",
+      "file": "src/main/java/dev/streamsreflowing/compat/streamscontrol/RiverStartupSession.java",
+      "mutation": "失败板块也计入成功完成",
+      "tests": 6,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "restored": true,
+      "originalSha256": "c156e136a04c9d582bc42567c3b597787041a8959639dc43579c8cd8c5ff4de0",
+      "log": "build/startup-ui-mutation-S1.log",
+      "verification_kind": "behavior-or-presentation-model"
+    },
+    {
+      "id": "S2",
+      "repo": "streams-reflowing-src",
+      "file": "src/main/java/dev/streamsreflowing/compat/streamscontrol/RiverStartupSession.java",
+      "mutation": "失败时抹掉进度状态",
+      "tests": 6,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "restored": true,
+      "originalSha256": "c156e136a04c9d582bc42567c3b597787041a8959639dc43579c8cd8c5ff4de0",
+      "log": "build/startup-ui-mutation-S2.log",
+      "verification_kind": "behavior-or-presentation-model"
+    },
+    {
+      "id": "S3",
+      "repo": "streams-reflowing-src",
+      "file": "src/main/java/dev/streamsreflowing/compat/streamscontrol/StreamsStartupProgress.java",
+      "mutation": "缓存探测计数恒零",
+      "tests": 6,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "restored": true,
+      "originalSha256": "b5a9617c8cdfc9d899d2cce257658011d1ac289255f60a875b13497890b64083",
+      "log": "build/startup-ui-mutation-S3.log",
+      "verification_kind": "behavior-or-presentation-model"
+    },
+    {
+      "id": "S4",
+      "repo": "streams-reflowing-src",
+      "file": "src/main/java/dev/streamsreflowing/compat/streamscontrol/StreamsPrewarmService.java",
+      "mutation": "正式服务入口断开缓存阶段发布",
+      "tests": 6,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "restored": true,
+      "originalSha256": "5752bc6e617e0ae158bf5f8ed725a4222f5a3df2d2cb3465331930792da17ce9",
+      "log": "build/startup-ui-mutation-S4.log",
+      "verification_kind": "source-wiring"
+    }
+  ],
+  "all_red_and_restored": true,
+  "final_full_suite_passed": true,
+  "live_client_verified": false
+}

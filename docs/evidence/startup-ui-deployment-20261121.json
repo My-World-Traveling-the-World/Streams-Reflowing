@@ -1,0 +1,25 @@
+{
+  "state": "deployed-hashes-verified",
+  "time": "2026-11-21T16:12:06.9241596+08:00",
+  "mods_dir": "D:\\minecraft\\Plain Craft Launcher 2\\.minecraft\\versions\\【云游四海】WAYFARING\\mods",
+  "backup_dir": "D:\\云游四海-Mod源码\\build\\three-mod-startup-ui-20261121-160927\\backup",
+  "entry": {
+    "id": "streamsreflowing",
+    "version": "2.12.8-fix10",
+    "source": "D:\\云游四海-Mod源码\\build\\three-mod-startup-ui-20261121-160927\\new\\streamsreflowing-2.12.8-fix10.jar",
+    "sha256": "ad3dfd9809cceba3ce26c1f06ace79498a35e19e0da85bd982580aa524257b19",
+    "bytes": 3325218,
+    "target": "D:\\minecraft\\Plain Craft Launcher 2\\.minecraft\\versions\\【云游四海】WAYFARING\\mods\\streamsreflowing-2.12.8-fix10.jar",
+    "before": [
+      {
+        "path": "D:\\minecraft\\Plain Craft Launcher 2\\.minecraft\\versions\\【云游四海】WAYFARING\\mods\\streamsreflowing-2.12.8-fix9.jar",
+        "sha256": "19aa6e6c492287cfd6981e813f2fcb8da028d8f37c984496393e6170eae1e6e5",
+        "version": "2.12.8-fix9"
+      }
+    ],
+    "tests": 83,
+    "production_head": "b5982cfb641eaeebb60404387f5da4f5d19cbf30"
+  },
+  "all_three_hashes_match": true,
+  "minecraft_launched": false
+}
