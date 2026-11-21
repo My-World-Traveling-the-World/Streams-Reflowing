@@ -121,5 +121,7 @@
   "plaincraft.streams.loading_progress.collapse": "▾ Collapse",
   "plaincraft.streams.loading_progress.eta": "Elapsed %s · remaining ~%s",
   "plaincraft.streams.loading_progress.eta_unknown": "Elapsed %s · remaining --",
-  "plaincraft.streams.loading_progress.elapsed_only": "Elapsed %s"
+  "plaincraft.streams.loading_progress.elapsed_only": "Elapsed %s",
+  "plaincraft.streams.loading_progress.cache_check": "Checking river cache: %s/%s plates",
+  "plaincraft.streams.loading_progress.failed": "River prewarm failed (%s failed plates); see logs"
 }

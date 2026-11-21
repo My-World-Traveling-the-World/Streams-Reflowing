@@ -50,5 +50,7 @@
   "plaincraft.streams.loading_progress.collapse": "▾ 收起",
   "plaincraft.streams.loading_progress.eta": "已用 %s · 预计剩余 %s",
   "plaincraft.streams.loading_progress.eta_unknown": "已用 %s · 预计剩余 --",
-  "plaincraft.streams.loading_progress.elapsed_only": "已用 %s"
+  "plaincraft.streams.loading_progress.elapsed_only": "已用 %s",
+  "plaincraft.streams.loading_progress.cache_check": "检查河流缓存：%s/%s 板块",
+  "plaincraft.streams.loading_progress.failed": "河流预热失败（失败板块：%s），请查看日志"
 }

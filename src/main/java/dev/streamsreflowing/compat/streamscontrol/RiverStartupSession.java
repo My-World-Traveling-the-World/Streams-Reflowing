@@ -28,6 +28,24 @@ final class RiverStartupSession {
         entered = true;
     }
 
+    synchronized void beginCache(int total, int workers) {
+        if (!closed && !finished) StreamsStartupProgress.beginCache(this, total, workers);
+    }
+
+    synchronized void cacheChecked() {
+        if (!closed && !finished) StreamsStartupProgress.cacheChecked(this);
+    }
+
+    /** 失败不计入成功板块，否则最后一个失败也会显示为全部完成。 */
+    synchronized int completedBuild(boolean success) {
+        if (closed || finished) return -1;
+        if (!success) {
+            StreamsStartupProgress.buildFailed(this);
+            return -1;
+        }
+        return completedOne();
+    }
+
     synchronized void progress(int total, int ready, int workers) {
         if (closed || finished) return;
         completed = ready;
@@ -66,12 +84,23 @@ final class RiverStartupSession {
         } finally {
             // 释放失败也属于失败，不能把清理异常显示成完成。
             if (success && released) StreamsStartupProgress.finish(this);
-            else StreamsStartupProgress.clear(this);
+            else StreamsStartupProgress.fail(this);
         }
     }
 
-    synchronized void close() {
-        if (closed) return;
+    /** 初始化异常同样撤销未开始任务，但留下失败卡片而不是悄悄消失。 */
+    synchronized void failAndClose() {
+        close(true);
+    }
+
+    synchronized void close() { close(false); }
+
+    private void close(boolean failed) {
+        // 初始化失败保留卡片，但世界停止时仍须按所有者清理它。
+        if (closed) {
+            if (!failed) StreamsStartupProgress.clear(this);
+            return;
+        }
         closed = true;
         // 先置关闭再撤销Future；同步触发的allOf回调不能再次释放本会话租约。
         for (var task : Set.copyOf(tasks)) task.cancel(false);
@@ -79,7 +108,8 @@ final class RiverStartupSession {
         try {
             release();
         } finally {
-            StreamsStartupProgress.clear(this);
+            if (failed) StreamsStartupProgress.fail(this);
+            else StreamsStartupProgress.clear(this);
         }
     }
 

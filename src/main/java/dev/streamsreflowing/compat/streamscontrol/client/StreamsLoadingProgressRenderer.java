@@ -3,6 +3,7 @@ package dev.streamsreflowing.compat.streamscontrol.client;
 import dev.streamsreflowing.fabric.StreamsConfigFabric;
 import java.util.Locale;
 import dev.streamsreflowing.compat.streamscontrol.StreamsStartupProgress;
+import dev.streamsreflowing.compat.streamscontrol.LoadingCardLayout;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -59,34 +60,25 @@ public final class StreamsLoadingProgressRenderer {
     public static void render(GuiGraphics graphics) {
         if (!StreamsConfigFabric.loadingNotice()) return;
         StreamsStartupProgress.Snapshot snapshot = StreamsStartupProgress.snapshot();
-        if (!snapshot.active() || snapshot.totalPlates() <= 0) return;
+        if ((!snapshot.active() && snapshot.stage() != StreamsStartupProgress.Stage.FAILED)
+                || snapshot.totalPlates() <= 0) return;
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft == null) return;
         Font font = minecraft.font;
 
         int screenWidth = minecraft.getWindow().getGuiScaledWidth();
         int screenHeight = minecraft.getWindow().getGuiScaledHeight();
-        // 卡片占据屏幕宽度 9/10；线稿带固定 120px（调好的显示比例），详情区一直显示，不再折叠。
-        int width = Math.max(280, (screenWidth * 9) / 10);
+        // 三模组各自拥有布局和测试，避免为显示进度添加运行期互相依赖。
+        LoadingCardLayout layout = LoadingCardLayout.fit(screenWidth, screenHeight, 280, 1);
+        int width = layout.width();
         int innerWidth = width - PADDING * 2;
-        int bandHeight = 120;
-
-        int detailLines = 1;
-        int height = PADDING
-                + LINE                  // title row
-                + bandHeight            // river band
-                + 6
-                + LINE                  // stepper
-                + 4
-                + LINE                  // status
-                + LINE                  // eta
-                + detailLines * LINE + 4
-                + PADDING;
-
-        int left = (screenWidth - width) / 2;
-        // The river card anchors centred, lifted off the bottom edge by about an eighth of the
-        // screen height so it does not hug the corner.
-        int top = Math.max(20, screenHeight - height - Math.max(40, (screenHeight * 12) / 100));
+        int bandHeight = layout.bandHeight();
+        int height = layout.height();
+        graphics.pose().pushPose();
+        graphics.pose().translate(layout.x(), layout.y(), 0);
+        graphics.pose().scale(layout.scale(), layout.scale(), 1F);
+        int left = 0;
+        int top = 0;
         int right = left + width;
         int bottom = top + height;
         int x = left + PADDING;
@@ -112,8 +104,13 @@ public final class StreamsLoadingProgressRenderer {
         drawStepper(graphics, x, y, innerWidth, snapshot);
 
         y += LINE + 4;
-        Component status = Component.translatable("plaincraft.streams.loading_progress.summary",
-                snapshot.completedPlates(), snapshot.totalPlates(), snapshot.percent());
+        Component status = switch (snapshot.stage()) {
+            case CACHE_CHECK -> Component.translatable("plaincraft.streams.loading_progress.cache_check",
+                    snapshot.checkedPlates(), snapshot.totalPlates());
+            case FAILED -> Component.translatable("plaincraft.streams.loading_progress.failed", snapshot.failedPlates());
+            default -> Component.translatable("plaincraft.streams.loading_progress.summary",
+                    snapshot.completedPlates(), snapshot.totalPlates(), snapshot.percent());
+        };
         drawFitted(graphics, font, status, x, y, innerWidth, TEXT_SECONDARY);
 
         y += LINE;
@@ -124,6 +121,7 @@ public final class StreamsLoadingProgressRenderer {
         Component detail = Component.translatable("plaincraft.streams.loading_progress.detail",
                 snapshot.alreadyReadyPlates(), snapshot.buildWorkers(), elapsedSeconds);
         drawFitted(graphics, font, detail, x, y, innerWidth, TEXT_MUTED);
+        graphics.pose().popPose();
     }
 
     // ---------------------------------------------------------------------------------------------

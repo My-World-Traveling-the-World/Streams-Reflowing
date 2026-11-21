@@ -131,6 +131,8 @@ public final class StreamsPrewarmService {
             // 第一段：并行探测磁盘缓存。上一局预热完成时每块板都已增量落盘
             // （saves/<world>/streamsreflowing/<dim>/r.<cx>.<cz>.srn），这里把它们读回内存，
             // 既计入 alreadyReady，也不再进入第二段的 build —— 第二次进同一存档就是 0 次构建。
+            // 在磁盘缓存探测前点亮卡片，缓存全命中仍能看到真实等待。
+            state.startupWork.beginCache(plates.size(), config.startupPlateWorkers());
             int[] states = primePlateStates(context, plates, executor, state.startupWork);
             int ready = 0;
             int restoredFromDisk = 0;
@@ -151,24 +153,23 @@ public final class StreamsPrewarmService {
                     centerX, centerZ, config.startupRadiusChunks(), plates.size(), alreadyReady,
                     restored, config.startupPlateWorkers(), config.startupSamplerThreads(),
                     context.plateScale());
-            // 全命中时不点亮进度卡片：没有要等的构建，UI 不该再弹。
-            if (!missing.isEmpty()) {
-                state.startupWork.progress(plates.size(), alreadyReady, config.startupPlateWorkers());
-            }
+            // 阶段切换保留会话起点，命中缓存也计入已就绪板块。
+            state.startupWork.progress(plates.size(), alreadyReady, config.startupPlateWorkers());
             long started = System.nanoTime();
             int progressStep = Math.max(1, plates.size() / 10);
             List<CompletableFuture<Void>> futures = new ArrayList<>(missing.size());
             for (PlateRef plate : missing) {
                 CompletableFuture<Void> future = state.startupWork.submit(
                         executor, () -> build(context, plate.key()));
-                future.whenComplete((ignored, failure) -> {
-                    int done = state.startupWork.completedOne();
+                // allOf 等计数回调结束，避免失败结果先封口、最后一块错误计数随后被丢弃。
+                CompletableFuture<Void> tracked = future.whenComplete((ignored, failure) -> {
+                    int done = state.startupWork.completedBuild(failure == null);
                     if (done >= 0 && (done == plates.size() || done % progressStep == 0)) {
                         LOGGER.info("Streams startup prewarm progress: {}/{} plates, elapsedMs={}.",
                                 done, plates.size(), elapsedMillis(started));
                     }
                 });
-                futures.add(future);
+                futures.add(tracked);
             }
             CompletableFuture<Void> combined = CompletableFuture.allOf(
                     futures.toArray(new CompletableFuture[0]));
@@ -187,7 +188,7 @@ public final class StreamsPrewarmService {
         } catch (Throwable failure) {
             // 同步初始化与异步构建失败都必须留下结果，防止下游误报 ready。
             state.startup.failed(unwrap(failure));
-            state.startupWork.close();
+            state.startupWork.failAndClose();
             LOGGER.warn("Could not start Streams startup prewarm", unwrap(failure));
         }
     }
@@ -512,6 +513,9 @@ public final class StreamsPrewarmService {
                     states[slot] = plateState(context, key);
                 } catch (Throwable failure) {
                     states[slot] = 0;
+                } finally {
+                    // 未命中也完成了探测，不能让检查计数永远卡在最后几块。
+                    session.cacheChecked();
                 }
             }));
         }
