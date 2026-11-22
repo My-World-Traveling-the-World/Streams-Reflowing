@@ -174,74 +174,8 @@ public final class NetworkTracer {
         long l4 = System.nanoTime();
         int n30 = lowResGrid.size();
         int n31 = streamsConfig.seaLevel();
-        boolean[] blArray = new boolean[n30];
         TouchedCellMask blArrayCellScratch = new TouchedCellMask(n30);
-        ArrayDeque<Integer> arrayDeque = new ArrayDeque<Integer>();
-        for (n29 = 0; n29 < n30; ++n29) {
-            if (!lowResGrid.inDomain(n29) || lowResGrid.height(n29) == -1000.0) continue;
-            n28 = terrainSampler.waterBiomeClass(Math.round(lowResGrid.worldX(lowResGrid.gi(n29))), Math.round(lowResGrid.worldZ(lowResGrid.gj(n29))));
-            if (n28 == 1) {
-                lowResGrid.overrideHeight(n29, -1001.0);
-                lowResGrid.markRiverOutlet(n29);
-                blArray[n29] = true;
-                arrayDeque.add(n29);
-                continue;
-            }
-            if (n28 != 2) continue;
-            lowResGrid.overrideHeight(n29, -1000.0);
-            blArray[n29] = true;
-        }
-        if (Boolean.getBoolean("streamsreflowing.caldiag")) {
-            n29 = 0;
-            for (n28 = 0; n28 < n30; ++n28) {
-                if (!lowResGrid.riverOutlet(n28)) continue;
-                ++n29;
-            }
-            Constants.LOG.info("[SR-RTF] plate {}: {} river-outlet cells after tier 1", (Object)plateDomain.key(), (Object)n29);
-        }
-        if (!Boolean.getBoolean("streamsreflowing.nohighrivers")) {
-            int n32;
-            int n33;
-            int n34;
-            for (n29 = 0; n29 < n30; ++n29) {
-                if (blArray[n29] || !lowResGrid.inDomain(n29) || lowResGrid.height(n29) <= (double)(n31 + 8)) continue;
-                n28 = 0;
-                n34 = lowResGrid.gi(n29);
-                n27 = lowResGrid.gj(n29);
-                for (n33 = 0; n33 < 8; ++n33) {
-                    n32 = n34 + a[n33];
-                    n26 = n27 + b[n33];
-                    if (!lowResGrid.valid(n32, n26) || !lowResGrid.inDomain(lowResGrid.idx(n32, n26)) || !(lowResGrid.height(lowResGrid.idx(n32, n26)) > lowResGrid.height(n29))) continue;
-                    ++n28;
-                }
-                if (n28 < 5) continue;
-                blArray[n29] = true;
-                if (terrainSampler.waterBiomeClassAt(Math.round(lowResGrid.worldX(n34)), (int)Math.round(lowResGrid.height(n29)), Math.round(lowResGrid.worldZ(n27))) != 1) continue;
-                lowResGrid.overrideHeight(n29, -1001.0);
-                lowResGrid.markRiverOutlet(n29);
-                arrayDeque.add(n29);
-            }
-            n29 = 0;
-            while (!arrayDeque.isEmpty()) {
-                n28 = (Integer)arrayDeque.poll();
-                n34 = lowResGrid.gi(n28);
-                n27 = lowResGrid.gj(n28);
-                for (n33 = 0; n33 < 8; ++n33) {
-                    n32 = n34 + a[n33];
-                    n26 = n27 + b[n33];
-                    if (!lowResGrid.valid(n32, n26) || blArray[n25 = lowResGrid.idx(n32, n26)] || !lowResGrid.inDomain(n25) || lowResGrid.height(n25) == -1000.0) continue;
-                    blArray[n25] = true;
-                    if (terrainSampler.waterBiomeClassAt(Math.round(lowResGrid.worldX(n32)), (int)Math.round(lowResGrid.height(n25)), Math.round(lowResGrid.worldZ(n26))) != 1) continue;
-                    lowResGrid.overrideHeight(n25, -1001.0);
-                    lowResGrid.markRiverOutlet(n25);
-                    arrayDeque.add(n25);
-                    ++n29;
-                }
-            }
-            if (n29 > 0) {
-                Constants.LOG.debug("[SR-MERGE] high-river outlets: {} extra river cells found above the sea-level probe", (Object)n29);
-            }
-        }
+        PlateOutletSeeds.mark(plateDomain.key(), lowResGrid, terrainSampler, n31, a, b);
         if (O) {
             n29 = Math.max(1, n30 / 64);
             n28 = 0;
