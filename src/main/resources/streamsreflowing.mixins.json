@@ -27,7 +27,6 @@
     "StreamsSamplerConcurrencyMixin",
     "StreamsLowResGridGpuMixin",
     "StreamsLowResGridHybridBatchMixin",
-    "StreamsPlateCacheCapacityMixin",
     "StreamsServerLifecycleMixin",
     "StreamsRiverHeightGateMixin"
   ],

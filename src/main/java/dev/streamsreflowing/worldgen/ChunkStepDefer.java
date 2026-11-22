@@ -11,13 +11,14 @@ import dev.streamsreflowing.platform.Services;
 import dev.streamsreflowing.worldgen.StreamPrefetcher;
 import dev.streamsreflowing.worldgen.StreamsWorldgen;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 import net.minecraft.Util;
 import net.minecraft.server.level.GenerationChunkHolder;
 import net.minecraft.server.level.ServerLevel;
@@ -32,7 +33,7 @@ import net.minecraft.world.level.chunk.status.WorldGenContext;
 public final class ChunkStepDefer {
     private static final boolean a = Boolean.getBoolean("streamsreflowing.nochunkdefer");
     private static final boolean b = Boolean.getBoolean("streamsreflowing.caldiag");
-    private static final ConcurrentHashMap<Long, Object[]> c = new ConcurrentHashMap();
+    private static final ConcurrentHashMap<WaitKey, Pending> c = new ConcurrentHashMap<>();
     private static final AtomicBoolean d = new AtomicBoolean();
     private static volatile Boolean e;
     private static final double f = 48.0;
@@ -40,49 +41,44 @@ public final class ChunkStepDefer {
     private ChunkStepDefer() {
     }
 
-    private static void a(ChunkPos chunkPos, double d, double d2, RiverEngine riverEngine) {
-        ArrayList<PlateKey> arrayList = new ArrayList<PlateKey>(2);
-        for (PlateKey plateKey : riverEngine.platesNear(d, d2, 48.0)) {
-            if (riverEngine.isPlateReady(plateKey)) continue;
-            arrayList.add(plateKey);
+    private record WaitKey(RiverEngine engine, ChunkPos chunk, ChunkStatus status) {}
+    private record Pending(long started, List<PlateKey> plates) {}
+
+    private static Pending watch(WaitKey key, double x, double z, long started) {
+        List<PlateKey> waiting = new ArrayList<>(2);
+        for (PlateKey plate : key.engine().platesNear(x, z, 48.0)) {
+            if (!key.engine().isPlateReady(plate)) waiting.add(plate);
         }
-        c.put((long)chunkPos.x << 32 ^ (long)chunkPos.z & 0xFFFFFFFFL, new Object[]{System.nanoTime(), riverEngine, arrayList});
-        if (ChunkStepDefer.d.compareAndSet(false, true)) {
-            ChunkStepDefer.a();
-        }
+        Pending pending = new Pending(started, waiting);
+        c.put(key, pending);
+        if (d.compareAndSet(false, true)) startWatchdog();
+        return pending;
     }
 
-    private static void a() {
+    private static void startWatchdog() {
         Thread thread = new Thread(() -> {
-            while (true) {
+            while (!Thread.currentThread().isInterrupted()) {
                 try {
-                    block4: while (true) {
-                        Thread.sleep(10000L);
-                        long l = System.nanoTime();
-                        Iterator<Map.Entry<Long, Object[]>> iterator = c.entrySet().iterator();
-                        while (true) {
-                            if (!iterator.hasNext()) continue block4;
-                            Map.Entry<Long, Object[]> entry = iterator.next();
-                            Object[] objectArray = entry.getValue();
-                            long l2 = (l - (Long)objectArray[0]) / 1000000L;
-                            if (l2 < 15000L) continue;
-                            RiverEngine riverEngine = (RiverEngine)objectArray[1];
-                            List list = (List)objectArray[2];
-                            StringBuilder stringBuilder = new StringBuilder();
-                            for (Object e : list) {
-                                PlateKey plateKey = (PlateKey)e;
-                                stringBuilder.append(" [").append(plateKey).append(" ready=").append(riverEngine.isPlateReady(plateKey)).append(' ').append(StreamPrefetcher.plateDiag(riverEngine, plateKey)).append(']');
-                            }
-                            Constants.LOG.warn("[SR-WEDGE] chunk ({},{}) deferred {} ms and NOT resumed; plates:{} | {}", (int)(entry.getKey() >> 32), entry.getKey().intValue(), l2, stringBuilder, StreamPrefetcher.laneDiag());
+                    Thread.sleep(10000L);
+                    long now = System.nanoTime();
+                    for (var entry : c.entrySet()) {
+                        WaitKey key = entry.getKey();
+                        Pending pending = entry.getValue();
+                        long ms = (now - pending.started()) / 1_000_000L;
+                        if (ms < 15_000L) continue;
+                        StringBuilder plates = new StringBuilder();
+                        for (PlateKey plate : pending.plates()) {
+                            plates.append(" [").append(plate).append(" ready=")
+                                    .append(key.engine().isPlateReady(plate)).append(' ')
+                                    .append(StreamPrefetcher.plateDiag(key.engine(), plate)).append(']');
                         }
+                        Constants.LOG.warn("[SR-WEDGE] 区块 {} 的 {} 已等候河流 {} ms；板块:{} | {}",
+                                key.chunk(), key.status(), ms, plates, StreamPrefetcher.laneDiag());
                     }
-                }
-                catch (InterruptedException interruptedException) {
+                } catch (InterruptedException interrupted) {
                     return;
-                }
-                catch (Throwable throwable) {
-                    Constants.LOG.warn("[SR-WEDGE] watchdog error", throwable);
-                    continue;
+                } catch (RuntimeException failure) {
+                    Constants.LOG.warn("[SR-WEDGE] 河流区块等候诊断失败", failure);
                 }
             }
         }, "streamsreflowing-defer-watchdog");
@@ -125,32 +121,37 @@ public final class ChunkStepDefer {
             return null;
         }
         RiverEngine riverEngine = StreamsWorldgen.engine(serverLevel);
-        if (riverEngine == null) {
-            return null;
-        }
+        if (riverEngine.isClosed()) return null;
         ChunkPos chunkPos = chunkAccess.getPos();
         double d2 = (double)chunkPos.getMinBlockX() + 8.0;
         if (riverEngine.platesReadyNear(d2, d = (double)chunkPos.getMinBlockZ() + 8.0, 48.0)) {
             return null;
         }
         FlowTrace.deferred.incrementAndGet();
-        if (b) {
-            ChunkStepDefer.a(chunkPos, d2, d, riverEngine);
-        }
-        long l = System.nanoTime();
-        int n = chunkPos.x;
-        int n2 = chunkPos.z;
-        return riverEngine.whenPlatesReadyNear(d2, d, 48.0).thenComposeAsync(void_ -> {
-            long l2;
-            FlowTrace.resumed.incrementAndGet();
-            if (b) {
-                c.remove((long)n << 32 ^ (long)n2 & 0xFFFFFFFFL);
-            }
-            if (Boolean.getBoolean("streamsreflowing.caldiag") && (l2 = (System.nanoTime() - l) / 1000000L) >= 50L) {
-                Constants.LOG.info("[SR-DEFER] chunk ({},{}) {} waited {} ms for plates", n, n2, chunkStatus == ChunkStatus.FEATURES ? "FEATURES" : "CARVERS", l2);
-            }
-            return chunkStep.apply(worldGenContext, staticCache2D, chunkAccess);
-        }, (Executor)Util.backgroundExecutor());
+        long started = System.nanoTime();
+        WaitKey key = b ? new WaitKey(riverEngine, chunkPos, chunkStatus) : null;
+        Pending pending = b ? watch(key, d2, d, started) : null;
+        CompletableFuture<ChunkAccess> deferred = resumeAfterPlates(
+                StreamPrefetcher.requestPlates(riverEngine, d2, d, 48.0),
+                () -> !riverEngine.isClosed() && !StreamPrefetcher.isServerStopping(), () -> {
+                    FlowTrace.resumed.incrementAndGet();
+                    long ms = (System.nanoTime() - started) / 1_000_000L;
+                    if (b && ms >= 50L) Constants.LOG.info("[SR-DEFER] 区块 {} 进入 {} 前等待河流板块 {} ms",
+                            chunkPos, chunkStatus, ms);
+                    return chunkStep.apply(worldGenContext, staticCache2D, chunkAccess);
+                }, Util.backgroundExecutor());
+        // 失败和取消也必须清掉诊断，且不能删掉同一区块后来登记的等待。
+        if (b) deferred.whenComplete((chunk, failure) -> c.remove(key, pending));
+        return deferred;
+    }
+
+    static <T> CompletableFuture<T> resumeAfterPlates(CompletableFuture<Void> ready, BooleanSupplier open,
+                                                       Supplier<CompletableFuture<T>> resume, Executor executor) {
+        return ready.thenComposeAsync(ignored -> {
+            // 就绪与执行之间可以关服；不能让旧世界的区块在回调队列里复活。
+            if (!open.getAsBoolean()) return CompletableFuture.failedFuture(new CancellationException("河流世界已关闭"));
+            return resume.get();
+        }, executor);
     }
 }
 

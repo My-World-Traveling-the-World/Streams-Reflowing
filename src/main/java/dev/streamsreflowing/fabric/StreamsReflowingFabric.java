@@ -15,6 +15,7 @@ import dev.streamsreflowing.fabric.fluid.StreamFluids;
 import dev.streamsreflowing.fabric.net.StreamFlowNet;
 import dev.streamsreflowing.fabric.particle.StreamParticles;
 import dev.streamsreflowing.flow.RTFFlowUnderlay;
+import dev.streamsreflowing.worldgen.StreamChannelDiagnostics;
 import dev.streamsreflowing.worldgen.StreamPrefetcher;
 import dev.streamsreflowing.worldgen.StreamsWorldgen;
 import dev.streamsreflowing.worldgen.bank.BankFeature;
@@ -93,7 +94,11 @@ implements ModInitializer {
         if (StallWatch.ENABLED) {
             ServerTickEvents.END_SERVER_TICK.register(server -> StallWatch.beatServer());
         }
-        ServerLifecycleEvents.SERVER_STARTING.register(server -> StreamsConfigFabric.load());
+        ServerLifecycleEvents.SERVER_STARTING.register(server -> {
+            // 换周目只重开接单；旧世界的板块缓存保持关闭。
+            StreamPrefetcher.onServerStarting();
+            StreamsConfigFabric.load();
+        });
         ServerLifecycleEvents.SERVER_STARTING.register(server -> RegenPending.applyAtBoot(server));
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             String at;
@@ -103,7 +108,7 @@ implements ModInitializer {
             if ((at = System.getProperty("streamsreflowing.autotrace")) != null && !at.isBlank()) {
                 try {
                     String[] p = at.split(",");
-                    StreamPrefetcher.autoTrace(server, Integer.parseInt(p[0].trim()), Integer.parseInt(p[1].trim()));
+                    StreamChannelDiagnostics.autoTrace(server, Integer.parseInt(p[0].trim()), Integer.parseInt(p[1].trim()));
                 }
                 catch (RuntimeException ex) {
                     Constants.LOG.warn("[SR-AUTOTRACE] bad streamsreflowing.autotrace: {}", (Object)at, (Object)ex);

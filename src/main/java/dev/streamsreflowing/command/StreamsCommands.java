@@ -16,7 +16,8 @@ import dev.streamsreflowing.platform.Services;
 import dev.streamsreflowing.worldgen.RiverCarverFeature;
 import dev.streamsreflowing.worldgen.RiverFlowFields;
 import dev.streamsreflowing.worldgen.StreamBiomeBlacklist;
-import dev.streamsreflowing.worldgen.StreamPrefetcher;
+import dev.streamsreflowing.worldgen.StreamChannelDiagnostics;
+import dev.streamsreflowing.worldgen.StreamColumnDiagnostics;
 import dev.streamsreflowing.worldgen.StreamSnowCleanupFeature;
 import dev.streamsreflowing.worldgen.StreamsWorldgen;
 import dev.streamsreflowing.worldgen.UnderwaterFloraBlacklist;
@@ -55,9 +56,9 @@ public final class StreamsCommands {
         int x = (int)Math.floor(p.x);
         int z = (int)Math.floor(p.z);
         RiverEngine engine = StreamsWorldgen.engine(level);
-        StreamPrefetcher.diagnoseColumn(engine, level, x, z);
-        StreamPrefetcher.traceColumn(engine, level, x, z);
-        StreamPrefetcher.superTrace(engine, level, x, z);
+        StreamColumnDiagnostics.diagnoseColumn(engine, level, x, z);
+        StreamColumnDiagnostics.traceColumn(engine, level, x, z);
+        StreamChannelDiagnostics.superTrace(engine, level, x, z);
         StreamsCommands.probeFlora(src, level, x, z);
         src.sendSuccess(() -> Component.literal("Full column trace for (" + x + ", " + z + ") written to the server log."), false);
         return 1;
@@ -71,7 +72,7 @@ public final class StreamsCommands {
         Vec3 p = src.getPosition();
         int x = (int)Math.floor(p.x);
         int z = (int)Math.floor(p.z);
-        StreamPrefetcher.segmentMap(StreamsWorldgen.engine(level), level, x, z, radius);
+        StreamChannelDiagnostics.segmentMap(StreamsWorldgen.engine(level), level, x, z, radius);
         RiverCarverFeature.waterMap(level, BlockPos.containing(p.x, p.y, p.z), Math.max(1, radius / 16));
         StreamSnowCleanupFeature.tintMap(level, x, z);
         RiverFlowFields.flowMap(x, z, Math.max(8, radius / 4));
@@ -135,7 +136,7 @@ public final class StreamsCommands {
             int cx = (int)Math.floor(p.x);
             int cz = (int)Math.floor(p.z);
             int radius = IntegerArgumentType.getInteger(ctx, "radius");
-            boolean started = StreamPrefetcher.startCensus(StreamsWorldgen.engine(level), level, cx, cz, radius);
+            boolean started = StreamColumnDiagnostics.startCensus(StreamsWorldgen.engine(level), level, cx, cz, radius);
             if (!started) {
                 src.sendFailure(Component.literal("A perch census is already running."));
                 return 0;

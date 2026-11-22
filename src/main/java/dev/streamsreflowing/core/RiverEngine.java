@@ -5,7 +5,6 @@ package dev.streamsreflowing.core;
 
 import dev.streamsreflowing.Constants;
 import dev.streamsreflowing.core.cache.NetworkStore;
-import dev.streamsreflowing.core.cache.PlateRiverCache;
 import dev.streamsreflowing.core.compose.ColumnPlan;
 import dev.streamsreflowing.core.config.StreamsConfig;
 import dev.streamsreflowing.core.diag.SampleTimer;
@@ -21,7 +20,6 @@ import dev.streamsreflowing.core.terrain.TerrainSampler;
 import dev.streamsreflowing.core.terrain.WetnessSampler;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
@@ -29,11 +27,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.BiConsumer;
 import java.util.function.IntConsumer;
 
 public final class RiverEngine {
@@ -48,22 +45,12 @@ public final class RiverEngine {
     private final TerrainSampler g;
     private final WetnessSampler h;
     private final PlateLattice i;
-    private final PlateRiverCache j = new PlateRiverCache();
-    private final PlateRiverCache k = new PlateRiverCache();
-    private final boolean l;
+    private final RiverPlateNetworks plates;
     private final double m;
     private final double n;
     private final ThreadLocal<long[]> o = ThreadLocal.withInitial(() -> new long[]{Long.MIN_VALUE, 0L});
-    private final ThreadLocal<Object[]> p = ThreadLocal.withInitial(() -> {
-        Object[] objectArray = new Object[16];
-        this.s.add(objectArray);
-        return objectArray;
-    });
-    private final ThreadLocal<Object[]> q = ThreadLocal.withInitial(this::a);
     private final ThreadLocal<double[]> r = ThreadLocal.withInitial(() -> new double[2]);
-    private final Set<Object[]> s = Collections.newSetFromMap(new ConcurrentHashMap());
     private volatile BuildListener t;
-    private volatile NetworkStore u;
     private static final AtomicInteger v = new AtomicInteger();
     private static volatile long w = System.nanoTime() - 60000000000L;
     private static final int x = 4;
@@ -116,24 +103,10 @@ public final class RiverEngine {
     });
     private final ThreadLocal<long[]> ac = ThreadLocal.withInitial(() -> new long[4096]);
     private final ThreadLocal<long[]> ad = ThreadLocal.withInitial(() -> new long[]{Long.MIN_VALUE, 0L, 0L});
-    private static volatile BiConsumer<RiverEngine, PlateKey> ae;
 
     public static int insetFor(double d, StreamsConfig streamsConfig) {
         double d2 = 0.5 + 0.5 * Math.min(1.0, d / 3.0);
         return (int)Math.round(streamsConfig.ditchInset() * d2);
-    }
-
-    private Object[] a() {
-        Object[] objectArray = new Object[2];
-        this.s.add(objectArray);
-        return objectArray;
-    }
-
-    public void releaseThreadMemos() {
-        for (Object[] objectArray : this.s) {
-            Arrays.fill(objectArray, null);
-        }
-        this.s.clear();
     }
 
     public RiverEngine(long l, StreamsConfig streamsConfig, TerrainSampler terrainSampler) {
@@ -146,9 +119,11 @@ public final class RiverEngine {
         this.g = terrainSampler;
         this.h = wetnessSampler;
         this.i = new PlateLattice(l, streamsConfig.plateScale(), streamsConfig.plateJitter());
-        this.l = streamsConfig.connectNearbyWater();
+        // 连接后的河网仍依赖基础板；缓存随其所属的世界关闭。
+        this.plates = new RiverPlateNetworks(streamsConfig.connectNearbyWater(), this::b,
+                key -> NetworkTracer.connectNetwork(key, this::baseFor, this.i, this.g, this.f, this.e));
         this.m = streamsConfig.maxWidth() * (1.0 + streamsConfig.bankWidth()) + 2.0;
-        this.n = this.l ? Math.max(this.m, streamsConfig.connectRadius()) : this.m;
+        this.n = streamsConfig.connectNearbyWater() ? Math.max(this.m, streamsConfig.connectRadius()) : this.m;
     }
 
     public StreamsConfig config() {
@@ -171,50 +146,15 @@ public final class RiverEngine {
         this.t = buildListener;
     }
 
-    public void setNetworkStore(NetworkStore networkStore) {
-        this.u = networkStore;
-    }
+    public void setNetworkStore(NetworkStore networkStore) { plates.setStore(networkStore); }
 
-    public RiverNetwork networkFor(PlateKey plateKey) {
-        if (!this.l) {
-            return this.baseFor(plateKey);
-        }
-        Object[] objectArray = this.p.get();
-        int n = plateKey.hashCode() * 0x9E3779B1 >>> 29;
-        if (plateKey.equals(objectArray[n << 1])) {
-            return (RiverNetwork)objectArray[(n << 1) + 1];
-        }
-        RiverNetwork riverNetwork = this.k.get(plateKey, () -> NetworkTracer.connectNetwork(plateKey, this::baseFor, this.i, this.g, this.f, this.e), () -> NetworkTracer.connectNetwork(plateKey, this::baseFor, this.i, this.g, this.f, this.e));
-        objectArray[n << 1] = plateKey;
-        objectArray[(n << 1) + 1] = riverNetwork;
-        return riverNetwork;
-    }
+    public RiverNetwork networkFor(PlateKey key) { return plates.networkFor(key); }
 
-    public RiverNetwork baseFor(PlateKey plateKey) {
-        Object[] objectArray = this.q.get();
-        if (plateKey.equals(objectArray[0])) {
-            return (RiverNetwork)objectArray[1];
-        }
-        RiverNetwork riverNetwork = this.a(plateKey);
-        objectArray[0] = plateKey;
-        objectArray[1] = riverNetwork;
-        return riverNetwork;
-    }
+    public RiverNetwork baseFor(PlateKey key) { return plates.baseFor(key); }
 
-    private RiverNetwork a(PlateKey plateKey) {
-        return this.j.get(plateKey, () -> {
-            RiverNetwork riverNetwork;
-            NetworkStore networkStore = this.u;
-            if (networkStore != null && (riverNetwork = networkStore.load(plateKey)) != null) {
-                return riverNetwork;
-            }
-            riverNetwork = this.b(plateKey);
-            if (networkStore != null) {
-                networkStore.save(plateKey, riverNetwork);
-            }
-            return riverNetwork;
-        }, () -> this.b(plateKey));
-    }
+    public boolean isClosed() { return plates.isClosed(); }
+
+    public void close() { plates.close(); }
 
     public static boolean buildingNetworks() {
         return v.get() > 0 || System.nanoTime() - w < 700000000L;
@@ -1035,11 +975,11 @@ public final class RiverEngine {
     }
 
     public boolean isPlateCached(PlateKey plateKey) {
-        return (this.l ? this.k : this.j).contains(plateKey);
+        return plates.contains(plateKey);
     }
 
     public boolean isPlateReady(PlateKey plateKey) {
-        return (this.l ? this.k : this.j).isReady(plateKey);
+        return plates.isReady(plateKey);
     }
 
     /** {@link #plateCacheState} 返回值：没有可用缓存，调用方应照旧构建。 */
@@ -1049,57 +989,8 @@ public final class RiverEngine {
     /** {@link #plateCacheState} 返回值：本次调用从磁盘缓存读回并填入内存缓存。 */
     public static final int PLATE_RESTORED = 2;
 
-    /**
-     * 启动预热用的 plate 状态探针（运行期扫描仍用 {@link #isPlateReady}，只看内存、不读盘）。
-     *
-     * <p>返回 {@link #PLATE_READY}（内存已就绪）、{@link #PLATE_RESTORED}（磁盘命中，本次
-     * 读回内存）或 {@link #PLATE_MISSING}（需要构建）。语义与结果说明：</p>
-     *
-     * <ul>
-     *   <li>磁盘命中走的复原路径与 {@link #baseFor} 完全一致：{@code NetworkStore.load} 把
-     *       当初 {@code NetworkTracer.build} 出来的段/湖原样读回，再由
-     *       {@code NetworkTracer.assemble} 重建同一份 {@link RiverNetwork}。段与湖都是
-     *       {@code double}/{@code int} 原值序列化，因此命中与重建的地形输出逐位一致。</li>
-     *   <li>命中后会把网络放进内存缓存（{@code j}），后续 {@link #networkFor} 直接零构建返回。</li>
-     *   <li>{@code connectNearbyWater} 打开时就绪的是跨板连接网络（{@code k}），它不是逐板
-     *       落盘的产物，这里直接返回 {@link #PLATE_MISSING}，保持原有构建行为不变。</li>
-     *   <li>文件损坏 / 截断 / 版本号或指纹不符时 {@code load} 返回 null，这里按未命中处理；
-     *       任何 IO 或运行时异常同样只当未命中，绝不向上抛。</li>
-     * </ul>
-     */
-    public int plateCacheState(PlateKey plateKey) {
-        if (this.isPlateReady(plateKey)) {
-            return PLATE_READY;
-        }
-        if (this.l) {
-            return PLATE_MISSING;
-        }
-        if (this.j.contains(plateKey)) {
-            // 缓存里有条目但还没就绪：要么有构建在飞，要么上一次构建失败了。绝不能在这里等 ——
-            // 服务器线程和渲染线程都可能调到这里。交回原来的构建路径（产物逐位相同），
-            // 这一轮不记「已就绪」。
-            return PLATE_MISSING;
-        }
-        NetworkStore networkStore = this.u;
-        if (networkStore == null) {
-            return PLATE_MISSING;
-        }
-        RiverNetwork restored;
-        try {
-            restored = networkStore.load(plateKey);
-        } catch (Throwable failure) {
-            Constants.LOG.warn("Streams plate {} could not be restored from disk; rebuilding ({})",
-                    plateKey, failure.toString());
-            return PLATE_MISSING;
-        }
-        if (restored == null) {
-            return PLATE_MISSING;
-        }
-        // 已经是成品，直接放进内存缓存：putIfAbsent 语义由 PlateRiverCache.get 负责，
-        // 与并发构建撞车时以先到者为准，两条路径的产物本来就逐位相同。
-        this.j.get(plateKey, () -> restored, () -> restored);
-        return this.j.isReady(plateKey) ? PLATE_RESTORED : PLATE_MISSING;
-    }
+    /** 启动探测可恢复磁盘缓存，但不会等待别的线程正在构建的板块。 */
+    public int plateCacheState(PlateKey key) { return plates.cacheState(key); }
 
     public boolean platesReadyNear(double d, double d2, double d3) {
         for (PlateKey plateKey : this.platesNear(d, d2, d3)) {
@@ -1109,28 +1000,27 @@ public final class RiverEngine {
         return true;
     }
 
-    public static void setBuildRequester(BiConsumer<RiverEngine, PlateKey> biConsumer) {
-        ae = biConsumer;
+    public CompletableFuture<Void> whenPlatesReadyNear(double x, double z, double radius, Executor executor) {
+        // 已就绪时不创建等待对象；失败必须保留原异常，不能让区块误继续。
+        ArrayList<CompletableFuture<Void>> waiting = null;
+        for (PlateKey key : platesNear(x, z, radius)) {
+            if (plates.isReady(key)) continue;
+            if (waiting == null) waiting = new ArrayList<>(2);
+            waiting.add(plates.request(key, executor));
+        }
+        if (waiting == null) return CompletableFuture.completedFuture(null);
+        if (waiting.size() == 1) return waiting.getFirst();
+        // 一个板块已判失败，区块就不能续跑；不用等别的板块也结束才通知区块。
+        var result = new CompletableFuture<Void>();
+        var remaining = new AtomicInteger(waiting.size());
+        for (var plate : waiting) plate.whenComplete((ignored, failure) -> {
+            if (failure != null) result.completeExceptionally(failure);
+            else if (remaining.decrementAndGet() == 0) result.complete(null);
+        });
+        return result;
     }
 
-    public CompletableFuture<Void> whenPlatesReadyNear(double d, double d2, double d3) {
-        ArrayList<CompletableFuture<Void>> arrayList = new ArrayList<CompletableFuture<Void>>(2);
-        BiConsumer<RiverEngine, PlateKey> biConsumer = ae;
-        for (PlateKey plateKey : this.platesNear(d, d2, d3)) {
-            if (this.isPlateReady(plateKey)) continue;
-            arrayList.add((this.l ? this.k : this.j).whenReady(plateKey));
-            if (biConsumer == null) continue;
-            biConsumer.accept(this, plateKey);
-        }
-        if (arrayList.isEmpty()) {
-            return CompletableFuture.completedFuture(null);
-        }
-        return CompletableFuture.allOf(arrayList.toArray(new CompletableFuture[0]));
-    }
-
-    public int cachedPlateCount() {
-        return this.j.size();
-    }
+    public int cachedPlateCount() { return plates.cachedBaseCount(); }
 
     @FunctionalInterface
     public static interface BuildListener {
