@@ -13,10 +13,16 @@ repositories {
 }
 
 dependencies {
-    // RoadWeaver 对外契约（标准 API）。compileOnly：运行期由独立部署的 roadweaver_api 提供。
-    compileOnly files(rootProject.file("../roadweaver/api/build/contract/roadweaver-api-contract-named.jar"))
-    // dev 运行时（含 gametest）要满足 depends，实体装载但不进产物。
-    modLocalRuntime files(rootProject.file("../roadweaver/api-fabric/build/contract/roadweaver-api-fabric-devmod.jar"))
+    // 同一份前置同时服务编译和 dev 运行，避免开发机误用旧道路仓库的 API。
+    def apiRoot = rootProject.file(providers.gradleProperty('roadweaverApiProjectDir').orElse('../roadweaver-next').get())
+    def contract = new File(apiRoot, 'api/build/contract/roadweaver-api-contract-named.jar')
+    def devApi = new File(apiRoot, 'api-fabric/build/contract/roadweaver-api-fabric-devmod.jar')
+    if (!contract.isFile() || !devApi.isFile()) {
+        throw new GradleException('缺独立 RoadWeaver API；请先执行 -PapiOnly :api:contractJar :api-fabric:devModJar')
+    }
+    compileOnly files(contract)
+    testImplementation files(contract)
+    modLocalRuntime files(devApi)
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     mappings loom.officialMojangMappings()
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
@@ -83,6 +89,8 @@ test {
     // 测试入口失效不能被零测试成功掩盖；新增守卫必须真正被发现。
     failOnNoDiscoveredTests = true
 }
+
+apply from: 'gradle/windows-test-classpath.gradle'
 
 // 只导出零游戏依赖契约；消费方compileOnly，运行时由河流成品自身提供同一份类。
 tasks.register('planContractJar', Jar) {

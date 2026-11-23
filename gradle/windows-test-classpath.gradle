@@ -1,0 +1,21 @@
+// Java 21 在 Windows 上按系统代码页读取 Gradle 的 argfile；中文路径用 ASCII URI 传递。
+if (System.getProperty('os.name').startsWith('Windows')
+        && !projectDir.absolutePath.chars().allMatch { it < 128 }) {
+    def projectKey = java.security.MessageDigest.getInstance('SHA-256')
+            .digest(projectDir.absolutePath.getBytes('UTF-8')).encodeHex().toString()
+    def bridge = tasks.register('testClasspathBridge', Jar) {
+        dependsOn tasks.named('testClasses')
+        archiveFileName = 'classpath.jar'
+        destinationDirectory = new File(gradle.gradleUserHomeDir, "caches/streamsreflowing/test-classpath/${projectKey}")
+        inputs.files(sourceSets.test.runtimeClasspath)
+        doFirst {
+            manifest.attributes('Class-Path': sourceSets.test.runtimeClasspath.files
+                    .collect { it.toURI().toASCIIString() }.join(' '))
+        }
+    }
+    tasks.named('test', Test) {
+        dependsOn bridge
+        classpath = files(bridge.flatMap { it.archiveFile })
+        inputs.files(sourceSets.test.runtimeClasspath)
+    }
+}

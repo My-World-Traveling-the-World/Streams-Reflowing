@@ -1,8 +1,0 @@
-{
-  "base": "4ec0b9b",
-  "original_sha256": "13342257b0f8585f25132771f6b37fdc4c57d061d3cfd05689f7529077aee43b",
-  "chain_segments_sha256": "0e5de0110343765cca9192b95da64c60336094bd0c4e40a5473100c9bbd306bf",
-  "heap_sha256": "42442a73e3d10c1d5c31ba87e02abf9fda1d4aa459e702a95b0be92112ef01f5",
-  "exact_old_slot_iteration": true,
-  "new_geometry": false
-}

@@ -1,7 +1,0 @@
-{
-  "replace": false,
-  "values": [
-    { "id": "streamsreflowing:stream", "required": false },
-    { "id": "streamsreflowing:flowing_stream", "required": false }
-  ]
-}
