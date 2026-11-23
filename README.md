@@ -1,16 +1,23 @@
 # StreamsReflowing · 河流
 
-在 Minecraft 的地形中生成溪流、河流和湖泊。沿着山谷顺流而下，可以看到溪流汇合、水道落差，以及水面周围的声效和粒子效果。
+**顺着溪流走过山谷，看水道汇合、落差与湖泊。**
 
-- 河流顺着地形组织水系，沿途形成河床、河岸和湖泊。
-- 新世界开局会先准备附近的水系，探索时继续为周边地形准备河流。
+`Minecraft 1.21.1` · `Fabric` · `Java 21+`
 
-## 安装需要什么
+[安装](#安装) · [模组联动](#模组联动) · [版本更新](CHANGELOG.md) · [开发指南](HANDOFF.md)
 
-本地适配版本面向 **Minecraft 1.21.1、Fabric Loader 0.16.10 或以上、Java 21 或以上、Fabric API** 和[**云游四海世界生成 API**](https://github.com/My-World-Traveling-the-World/PlainCraft-Worldgen-API/releases)。只玩河流不用安装道路或长城；三者合装时前置只放一份。Mod Menu 可选。
+| 功能 | 游戏里的体验 |
+| --- | --- |
+| 地形水系 | 水道沿地形组织成溪流、河流与湖泊，形成河床、河岸和落差。 |
+| 水面细节 | 水边带有声效与粒子效果。 |
+| 开局预热 | 新世界先准备出生区附近的水系，探索时继续准备周边区域。 |
 
-## 一起安装有什么变化
+## 安装
 
-河流预热完成后会发布就绪信号。[万里长城](https://github.com/My-World-Traveling-the-World/PlainCraft-Great-Wall)可据此安排自己的预热，RoadWeaver 可读取规划水道来选线和安排跨水路段。开局顺序是 **河流 → 长城 → 道路**；没有长城时为 **河流 → 道路**。河流本身可以独立生成。
+本机适配使用 **Fabric Loader 0.19.3** 验证。游戏需安装 Fabric API 和[云游四海世界生成 API](https://github.com/My-World-Traveling-the-World/PlainCraft-Worldgen-API/releases)。Mod Menu 可选。
 
-原模组作者：**nicejohn**。原作品保留全部权利；适配源码来源与分发边界见[恢复记录](RECOVERY.md)。构建、当前待办和离线验证见[开发交接](HANDOFF.md)。
+## 模组联动
+
+河流可以独立生成。合装兼容的长城或道路时，河流先发布就绪信号，供下游安排预热、选线和跨水路段。三者合装的顺序为 **河流 → 长城 → 道路**，前置只装一份。
+
+原模组作者为 **nicejohn**，上游保留全部权利。本机适配的来源和分发边界见[开发指南](HANDOFF.md)。
