@@ -439,19 +439,7 @@ public final class NearestRiverIndex {
             int n8 = this.a(d + d3);
             int n9 = this.b(d2 - d3);
             int n10 = this.b(d2 + d3);
-            for (int i = n7; i <= n8; ++i) {
-                int n16 = i - this.ac;
-                if (n16 < 0 || n16 >= this.ae) continue;
-                for (int j = n9; j <= n10; ++j) {
-                    int n17 = j - this.ad;
-                    if (n17 < 0 || n17 >= this.af) continue;
-                    int n18 = n16 + this.ae * n17;
-                    int n19 = this.ab[n18];
-                    int n20 = this.ab[n18 + 1];
-                    if (n19 == n20) continue;
-                    collector.addRange(this.aa, n19, n20);
-                }
-            }
+            collectBuckets(collector, n7, n8, n9, n10);
             return collector.scratch();
         }
         double d4 = (double)n4 * 16.0;
@@ -461,16 +449,7 @@ public final class NearestRiverIndex {
         int n13 = this.b(d5 - d3);
         int n14 = this.b(d5 + 16.0 + d3);
         // 热缓存只排序唯一河段：从M个桶条目排序改为M次位集判定加U个唯一项排序。
-        for (int cx = n11; cx <= n12; cx++) {
-            int ix = cx - this.ac;
-            if (ix < 0 || ix >= this.ae) continue;
-            for (int cz = n13; cz <= n14; cz++) {
-                int iz = cz - this.ad;
-                if (iz < 0 || iz >= this.af) continue;
-                int bucket = ix + this.ae * iz;
-                collector.addRange(this.aa, this.ab[bucket], this.ab[bucket + 1]);
-            }
-        }
+        collectBuckets(collector, n11, n12, n13, n14);
         int[] nArray8 = collector.sortedCopy();
         nArray = B.get();
         TieredCand tieredCand = tieredCandArray[nArray[0]];
@@ -480,6 +459,18 @@ public final class NearestRiverIndex {
         tieredCand.c = d3;
         tieredCand.d = nArray8;
         return nArray8;
+    }
+
+    /** 先裁到索引内再扫描，保留原桶顺序；大半径查询不再逐个跳过界外桶。 */
+    private void collectBuckets(RiverCandidateCollector collector, int minX, int maxX, int minZ, int maxZ) {
+        int fromX = Math.max(minX, this.ac), toX = Math.min(maxX, this.ac + this.ae - 1);
+        int fromZ = Math.max(minZ, this.ad), toZ = Math.min(maxZ, this.ad + this.af - 1);
+        for (int x = fromX; x <= toX; x++) {
+            for (int z = fromZ; z <= toZ; z++) {
+                int bucket = x - this.ac + this.ae * (z - this.ad);
+                collector.addRange(this.aa, this.ab[bucket], this.ab[bucket + 1]);
+            }
+        }
     }
 
     public boolean anyCorridorTouchesBox(double d, double d2, double d3, double d4) {
@@ -579,22 +570,21 @@ public final class NearestRiverIndex {
         int n5 = this.b(d2 - d3);
         int n6 = this.b(d2 + d3);
         double d7 = Double.NaN;
-        for (int i = n3; i <= n4; ++i) {
-            int n8 = i - this.ac;
-            if (n8 < 0 || n8 >= this.ae) continue;
-            for (int j = n5; j <= n6; ++j) {
-                int n9 = j - this.ad;
-                if (n9 < 0 || n9 >= this.af) continue;
-                int n10 = n8 + this.ae * n9;
-                for (int n11 = this.ab[n10]; n11 < this.ab[n10 + 1]; ++n11) {
-                    int n7 = this.aa[n11];
-                    double d8;
-                    double d9;
-                    RiverSegment riverSegment;
-                    if (n7 == n || this.x[n7] == n2 || (riverSegment = this.f.get(n7)).distanceAt(d, d2, d9 = riverSegment.clampParam(d, d2)) > d3 || !((d8 = riverSegment.gradeAt(d9)) < d6) || !Double.isNaN(d7) && !(d8 < d7)) continue;
-                    d7 = d8;
-                }
-            }
+        // 低邻河只取最小高程。同一河段跨桶时投影结果相同，保留首次遇到的编号即可。
+        var collector = D.get();
+        collector.begin(this.f.size());
+        collectBuckets(collector, n3, n4, n5, n6);
+        int[] candidates = collector.scratch();
+        for (int i = 0; candidates[i] >= 0; i++) {
+            int id = candidates[i];
+            if (id == n || this.x[id] == n2) continue;
+            var segment = this.f.get(id);
+            double param = segment.clampParam(d, d2);
+            double grade = segment.gradeAt(param);
+            // 不能降低当前结果时无需开平方；保留距离阈值与高程的原始比较。
+            if (!(grade < d6) || (!Double.isNaN(d7) && !(grade < d7))
+                    || segment.distanceAt(d, d2, param) > d3) continue;
+            d7 = grade;
         }
         return d7;
     }
