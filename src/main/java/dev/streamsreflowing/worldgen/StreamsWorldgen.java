@@ -469,8 +469,6 @@ public final class StreamsWorldgen {
         int n3;
         int n4;
         int n5;
-        double d;
-        double d2;
         RiverEngine riverEngine = StreamsWorldgen.d;
         if (riverEngine == null) {
             return false;
@@ -478,9 +476,12 @@ public final class StreamsWorldgen {
         int n6 = E;
         double d3 = (double)(boundingBox.maxX() - boundingBox.minX()) / 2.0 + (double)n6 + 1.0;
         double d4 = (double)(boundingBox.maxZ() - boundingBox.minZ()) / 2.0 + (double)n6 + 1.0;
-        double d5 = (double)(boundingBox.minX() + boundingBox.maxX()) / 2.0;
-        if (!riverEngine.platesReadyNear(d5, d2 = (double)(boundingBox.minZ() + boundingBox.maxZ()) / 2.0, d = Math.sqrt(d3 * d3 + d4 * d4))) {
-            StreamPrefetcher.requestPlates(riverEngine, d5, d2, d);
+        double centerX = (double)(boundingBox.minX() + boundingBox.maxX()) / 2.0;
+        double centerZ = (double)(boundingBox.minZ() + boundingBox.maxZ()) / 2.0;
+        // 缺板时复用上一次查询的邻板，不再按同一中心和半径重新枚举。
+        var plates = riverEngine.platesNear(centerX, centerZ, Math.sqrt(d3 * d3 + d4 * d4));
+        if (!riverEngine.platesReady(plates)) {
+            StreamPrefetcher.requestPlates(riverEngine, plates);
             return false;
         }
         int n7 = boundingBox.minX() - n6;

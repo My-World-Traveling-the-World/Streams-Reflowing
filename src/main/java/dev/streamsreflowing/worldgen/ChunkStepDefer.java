@@ -36,7 +36,7 @@ public final class ChunkStepDefer {
     private static final ConcurrentHashMap<WaitKey, Pending> c = new ConcurrentHashMap<>();
     private static final AtomicBoolean d = new AtomicBoolean();
     private static volatile Boolean e;
-    private static final double f = 48.0;
+    private static final double PLATE_RADIUS = 48.0;
 
     private ChunkStepDefer() {
     }
@@ -44,9 +44,9 @@ public final class ChunkStepDefer {
     private record WaitKey(RiverEngine engine, ChunkPos chunk, ChunkStatus status) {}
     private record Pending(long started, List<PlateKey> plates) {}
 
-    private static Pending watch(WaitKey key, double x, double z, long started) {
+    private static Pending watch(WaitKey key, PlateKey[] plates, long started) {
         List<PlateKey> waiting = new ArrayList<>(2);
-        for (PlateKey plate : key.engine().platesNear(x, z, 48.0)) {
+        for (PlateKey plate : plates) {
             if (!key.engine().isPlateReady(plate)) waiting.add(plate);
         }
         Pending pending = new Pending(started, waiting);
@@ -99,7 +99,6 @@ public final class ChunkStepDefer {
     }
 
     public static CompletableFuture<ChunkAccess> defer(ChunkStep chunkStep, WorldGenContext worldGenContext, StaticCache2D<GenerationChunkHolder> staticCache2D, ChunkAccess chunkAccess) {
-        double d;
         if (ChunkStepDefer.b()) {
             return null;
         }
@@ -123,16 +122,18 @@ public final class ChunkStepDefer {
         RiverEngine riverEngine = StreamsWorldgen.engine(serverLevel);
         if (riverEngine.isClosed()) return null;
         ChunkPos chunkPos = chunkAccess.getPos();
-        double d2 = (double)chunkPos.getMinBlockX() + 8.0;
-        if (riverEngine.platesReadyNear(d2, d = (double)chunkPos.getMinBlockZ() + 8.0, 48.0)) {
+        // 就绪、排队和卡住诊断必须看同一批邻板；缺板时也只做一次空间查询。
+        PlateKey[] plates = riverEngine.platesNear(
+                chunkPos.getMinBlockX() + 8.0, chunkPos.getMinBlockZ() + 8.0, PLATE_RADIUS);
+        if (riverEngine.platesReady(plates)) {
             return null;
         }
         FlowTrace.deferred.incrementAndGet();
         long started = System.nanoTime();
         WaitKey key = b ? new WaitKey(riverEngine, chunkPos, chunkStatus) : null;
-        Pending pending = b ? watch(key, d2, d, started) : null;
+        Pending pending = b ? watch(key, plates, started) : null;
         CompletableFuture<ChunkAccess> deferred = resumeAfterPlates(
-                StreamPrefetcher.requestPlates(riverEngine, d2, d, 48.0),
+                StreamPrefetcher.requestPlates(riverEngine, plates),
                 () -> !riverEngine.isClosed() && !StreamPrefetcher.isServerStopping(), () -> {
                     FlowTrace.resumed.incrementAndGet();
                     long ms = (System.nanoTime() - started) / 1_000_000L;

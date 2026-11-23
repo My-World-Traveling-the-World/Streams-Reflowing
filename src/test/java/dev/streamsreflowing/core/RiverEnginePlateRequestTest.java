@@ -89,6 +89,38 @@ class RiverEnginePlateRequestTest {
         }
     }
 
+    @Test void sharedNeighborhoodWaitsForEveryColdKeyAndDoesNotQueueWarmKeys() {
+        var config = StreamsConfig.defaults();
+        var engine = new RiverEngine(41, config, (x, z) -> fail("夹具内的板块都从存储恢复"));
+        var loaded = new java.util.ArrayList<PlateKey>();
+        engine.setNetworkStore(new NetworkStore() {
+            @Override public RiverNetwork load(PlateKey key) {
+                loaded.add(key);
+                return NetworkTracer.assemble(key, List.of(), List.of(), config);
+            }
+            @Override public void save(PlateKey key, RiverNetwork network) { fail("恢复命中不应写回"); }
+        });
+        try {
+            var keys = engine.platesNear(200, -900, 1800);
+            assertTrue(keys.length > 1, "夹具必须跨板边界");
+            assertFalse(engine.platesReady(keys));
+            var queue = new ArrayDeque<Runnable>();
+            var waiting = engine.whenPlatesReady(keys, queue::add);
+            assertEquals(keys.length, queue.size(), "每个缺板都必须排入且只排一次");
+            queue.remove().run();
+            assertFalse(waiting.isDone(), "只完成一块不能放行区块");
+            assertFalse(engine.platesReady(keys));
+            queue.forEach(Runnable::run);
+            waiting.join();
+            assertEquals(List.of(keys), loaded, "须按原顺序完成同一组邻板");
+            assertTrue(engine.platesReady(keys));
+            engine.whenPlatesReady(keys, ignored -> fail("热板不再排队")).join();
+            assertEquals(keys.length, loaded.size());
+        } finally {
+            engine.close();
+        }
+    }
+
     private static int[] plateInterior(RiverEngine engine, PlateKey key) {
         for (int x = 120; x < 500; x += 32) {
             for (int z = -1024; z < -560; z += 32) {

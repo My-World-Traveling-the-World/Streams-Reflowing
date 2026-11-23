@@ -992,8 +992,13 @@ public final class RiverEngine {
     /** 启动探测可恢复磁盘缓存，但不会等待别的线程正在构建的板块。 */
     public int plateCacheState(PlateKey key) { return plates.cacheState(key); }
 
-    public boolean platesReadyNear(double d, double d2, double d3) {
-        for (PlateKey plateKey : this.platesNear(d, d2, d3)) {
+    public boolean platesReadyNear(double x, double z, double radius) {
+        return platesReady(platesNear(x, z, radius));
+    }
+
+    /** 就绪查询与未就绪后的等待共用同一组邻板，避免重复计算板块边界。 */
+    public boolean platesReady(PlateKey[] keys) {
+        for (PlateKey plateKey : keys) {
             if (this.isPlateReady(plateKey)) continue;
             return false;
         }
@@ -1001,9 +1006,13 @@ public final class RiverEngine {
     }
 
     public CompletableFuture<Void> whenPlatesReadyNear(double x, double z, double radius, Executor executor) {
-        // 已就绪时不创建等待对象；失败必须保留原异常，不能让区块误继续。
+        return whenPlatesReady(platesNear(x, z, radius), executor);
+    }
+
+    public CompletableFuture<Void> whenPlatesReady(PlateKey[] keys, Executor executor) {
+        // 重新检查就绪状态：查询之后可能已有别的线程完成，不能重复排队。
         ArrayList<CompletableFuture<Void>> waiting = null;
-        for (PlateKey key : platesNear(x, z, radius)) {
+        for (PlateKey key : keys) {
             if (plates.isReady(key)) continue;
             if (waiting == null) waiting = new ArrayList<>(2);
             waiting.add(plates.request(key, executor));

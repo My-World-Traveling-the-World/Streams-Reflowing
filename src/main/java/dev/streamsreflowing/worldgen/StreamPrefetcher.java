@@ -527,9 +527,9 @@ public final class StreamPrefetcher {
                 () -> prefetchPlate(engine, key, packed, priority)));
     }
 
-    static CompletableFuture<Void> requestPlates(RiverEngine engine, double x, double z, double radius) {
+    static CompletableFuture<Void> requestPlates(RiverEngine engine, PlateKey[] keys) {
         // 急件的去重和重试由板块缓存持有，不能被低优先级预取的队列标记挡住。
-        return engine.whenPlatesReadyNear(x, z, radius, StreamPrefetcher::enqueueDemand);
+        return engine.whenPlatesReady(keys, StreamPrefetcher::enqueueDemand);
     }
 
     private static void enqueueDemand(Runnable build) {
