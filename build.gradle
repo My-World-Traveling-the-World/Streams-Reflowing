@@ -14,11 +14,11 @@ repositories {
 
 dependencies {
     // 同一份前置同时服务编译和 dev 运行，避免开发机误用旧道路仓库的 API。
-    def apiRoot = rootProject.file(providers.gradleProperty('roadweaverApiProjectDir').orElse('../roadweaver-next').get())
+    def apiRoot = rootProject.file(providers.gradleProperty('worldgenApiProjectDir').orElse('../plaincraft-worldgen-api').get())
     def contract = new File(apiRoot, 'api/build/contract/roadweaver-api-contract-named.jar')
     def devApi = new File(apiRoot, 'api-fabric/build/contract/roadweaver-api-fabric-devmod.jar')
     if (!contract.isFile() || !devApi.isFile()) {
-        throw new GradleException('缺独立 RoadWeaver API；请先执行 -PapiOnly :api:contractJar :api-fabric:devModJar')
+        throw new GradleException('缺云游四海世界生成 API；请先在独立前置仓库执行 :api:contractJar :api-fabric:devModJar')
     }
     compileOnly files(contract)
     testImplementation files(contract)

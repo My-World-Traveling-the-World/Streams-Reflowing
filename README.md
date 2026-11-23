@@ -7,7 +7,7 @@
 
 ## 安装需要什么
 
-本地适配版本面向 **Minecraft 1.21.1、Fabric Loader 0.16.10 或以上、Java 21 或以上、Fabric API** 和[**独立 RoadWeaver API**](https://github.com/My-World-Traveling-the-World/Roadweaver-Remastered/releases/tag/api-v1.1.1)。只玩河流不用安装道路或长城；三者合装时前置只放一份。Mod Menu 可选。
+本地适配版本面向 **Minecraft 1.21.1、Fabric Loader 0.16.10 或以上、Java 21 或以上、Fabric API** 和[**云游四海世界生成 API**](https://github.com/My-World-Traveling-the-World/PlainCraft-Worldgen-API/releases)。只玩河流不用安装道路或长城；三者合装时前置只放一份。Mod Menu 可选。
 
 ## 一起安装有什么变化
 
