@@ -30,7 +30,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLongArray;
@@ -214,105 +213,10 @@ public final class NetworkTracer {
                 arrayList.add(n27);
             }
         }
-        double[] dArray = new double[n30];
-        boolean[] blArray2 = new boolean[n30];
-        // pflood 优先队列：默认用原语 DoubleMinHeap（去 Integer 装箱 + 去 lambda 分配，
-        // 逐位等价，见 commit message 的等价性论证）。-Dstreamsreflowing.doubleminheap=false
-        // 可回退到原 PriorityQueue<Integer> 路径。
-        boolean useDoubleMinHeap = Boolean.parseBoolean(System.getProperty("streamsreflowing.doubleminheap", "true"));
-        PriorityQueue<Integer> priorityQueue = useDoubleMinHeap ? null
-                : new PriorityQueue<Integer>((n, n2) -> Double.compare(dArray[n], dArray[n2]));
-        DoubleMinHeap doubleMinHeap = useDoubleMinHeap ? new DoubleMinHeap() : null;
-        boolean[] blArray3 = new boolean[n30];
-        ArrayList<Integer> arrayList2 = new ArrayList<Integer>();
-        Iterator<Integer> iteratorCell = arrayList.iterator();
-        block14: while (iteratorCell.hasNext()) {
-            n25 = (Integer)iteratorCell.next();
-            if (!lowResGrid.riverOutlet(n25)) continue;
-            n24 = lowResGrid.gi(n25);
-            n23 = lowResGrid.gj(n25);
-            for (n22 = 0; n22 < 8; ++n22) {
-                int n35;
-                n21 = n24 + a[n22];
-                int n36 = n23 + b[n22];
-                if (!lowResGrid.valid(n21, n36) || !lowResGrid.inDomain(n35 = lowResGrid.idx(n21, n36)) || lowResGrid.riverOutlet(n35)) continue;
-                blArray3[n25] = true;
-                arrayList2.add(n25);
-                continue block14;
-            }
-        }
-        if (!arrayList2.isEmpty()) {
-            double[] dArrayBank = new double[arrayList2.size()];
-            ArrayList<Integer> arrayList3 = arrayList2;
-            LowResGrid.parallelFor(arrayList3.size(), arg_0 -> NetworkTracer.a(arrayList3, lowResGrid, terrainSampler, dArrayBank, arg_0));
-            for (n24 = 0; n24 < arrayList3.size(); ++n24) {
-                lowResGrid.overrideHeight((Integer)arrayList3.get(n24), dArrayBank[n24]);
-            }
-            if (Boolean.getBoolean("streamsreflowing.caldiag")) {
-                Constants.LOG.info("[SR-RTF] plate {}: {} river bank cells seeded", (Object)plateDomain.key(), (Object)arrayList3.size());
-            }
-        }
-        iteratorCell = arrayList.iterator();
-        while (iteratorCell.hasNext()) {
-            int n37 = (Integer)iteratorCell.next();
-            dArray[n37] = lowResGrid.height(n37);
-            if (lowResGrid.riverOutlet(n37)) {
-                blArray2[n37] = true;
-                if (!blArray3[n37]) continue;
-                if (useDoubleMinHeap) doubleMinHeap.add(dArray[n37], n37); else priorityQueue.add(n37);
-                continue;
-            }
-            if (!(lowResGrid.height(n37) <= (double)n31) && !NetworkTracer.a(lowResGrid, n37)) continue;
-            blArray2[n37] = true;
-            if (useDoubleMinHeap) doubleMinHeap.add(dArray[n37], n37); else priorityQueue.add(n37);
-        }
-        while (useDoubleMinHeap ? !doubleMinHeap.isEmpty() : !priorityQueue.isEmpty()) {
-            int n38 = useDoubleMinHeap ? doubleMinHeap.value() : (Integer)priorityQueue.poll();
-            if (useDoubleMinHeap) doubleMinHeap.pop();
-            int n39 = lowResGrid.gi(n38);
-            n24 = lowResGrid.gj(n38);
-            for (n23 = 0; n23 < 8; ++n23) {
-                int n40;
-                n22 = n39 + a[n23];
-                n21 = n24 + b[n23];
-                if (!lowResGrid.valid(n22, n21) || !lowResGrid.inDomain(n40 = lowResGrid.idx(n22, n21)) || blArray2[n40]) continue;
-                dArray[n40] = Math.max(lowResGrid.height(n40), dArray[n38] + 0.001);
-                blArray2[n40] = true;
-                if (useDoubleMinHeap) doubleMinHeap.add(dArray[n40], n40); else priorityQueue.add(n40);
-            }
-        }
+        // 这里仍分开计时；填洼和 D8 搬出后可用整板河段与湖面摘要对拍。
+        double[] dArray = PlatePriorityFlood.fill(plateDomain.key(), lowResGrid, terrainSampler, arrayList, n31, a, b);
         long l5 = System.nanoTime();
-        int[] nArray = new int[n30];
-        Iterator<Integer> iteratorSlope = arrayList.iterator();
-        while (iteratorSlope.hasNext()) {
-            n22 = (Integer)iteratorSlope.next();
-            nArray[n22] = -1;
-            n21 = lowResGrid.gi(n22);
-            int n41 = lowResGrid.gj(n22);
-            double d8 = dArray[n22];
-            double d9 = 0.0;
-            int n42 = -1;
-            for (n20 = 0; n20 < 8; ++n20) {
-                double d10;
-                int n43;
-                n19 = n21 + a[n20];
-                int n44 = n41 + b[n20];
-                if (!lowResGrid.valid(n19, n44) || !lowResGrid.inDomain(n43 = lowResGrid.idx(n19, n44))) continue;
-                if (lowResGrid.riverOutlet(n43)) {
-                    n42 = n43;
-                    break;
-                }
-                double d11 = d8 - dArray[n43];
-                if (d11 <= 0.0 || d8 <= (double)n31 - 2.0 && d11 < 2.0 || !((d10 = d11 / (n20 % 2 == 0 ? 1.0 : 1.4142135623730951)) > d9)) continue;
-                d9 = d10;
-                n42 = n43;
-            }
-            nArray[n22] = n42;
-        }
-        arrayList.sort((n, n2) -> {
-            int n147 = Double.compare(dArray[n2], dArray[n]);
-            return n147 != 0 ? n147 : Integer.compare(n, n2);
-        });
+        int[] nArray = PlatePriorityFlood.downstream(lowResGrid, arrayList, dArray, n31, a, b);
         double[] dArrayWet = new double[n30];
         double d12 = Math.max(0.0, streamsConfig.wetnessMultiplier());
         Iterator iterator2 = arrayList.iterator();
@@ -2567,18 +2471,6 @@ public final class NetworkTracer {
         return Hashing.unit(l, n, 71L) >= d6;
     }
 
-    private static boolean a(LowResGrid lowResGrid, int n) {
-        int n2 = lowResGrid.gi(n);
-        int n3 = lowResGrid.gj(n);
-        for (int i = 0; i < 8; ++i) {
-            int n4 = n2 + a[i];
-            int n5 = n3 + b[i];
-            if (lowResGrid.valid(n4, n5) && lowResGrid.inDomain(lowResGrid.idx(n4, n5))) continue;
-            return true;
-        }
-        return false;
-    }
-
     private static List<Pt> a(List<Pt> list, TerrainSampler terrainSampler, ColumnCache columnCache, StreamsConfig streamsConfig, boolean bl, List<Lake> list2) {
         int n = list.size();
         if (n < 2) {
@@ -3451,14 +3343,6 @@ public final class NetworkTracer {
 
     private static /* synthetic */ void a(List[] listArray, List list, int[] nArray, int[] nArray2, List list2, Map map, int[] nArray3, boolean[] blArray, int[] nArray4, double[] dArray, double[] dArray2, LowResGrid lowResGrid, TerrainSampler terrainSampler, WetnessSampler wetnessSampler, StreamsConfig streamsConfig, long l, int n, int n2) {
         listArray[n2] = NetworkTracer.a((Integer)list.get(n2), nArray, nArray2, list2, (Lake)map.get(nArray3[(Integer)list.get(n2)]), blArray, nArray4, dArray, dArray2, lowResGrid, terrainSampler, wetnessSampler, streamsConfig, l, n);
-    }
-
-    private static /* synthetic */ void a(List list, LowResGrid lowResGrid, TerrainSampler terrainSampler, double[] dArray, int n) {
-        int n2;
-        int n3 = (Integer)list.get(n);
-        int n4 = Math.round(lowResGrid.worldX(lowResGrid.gi(n3)));
-        double d = terrainSampler.riverSurface(n4, n2 = Math.round(lowResGrid.worldZ(lowResGrid.gj(n3))));
-        dArray[n] = Double.isNaN(d) ? terrainSampler.surfaceHeight(n4, n2) : d;
     }
 
     private record LocalBasin(int i0, int j0, int w, int h, double[] hgt, boolean[] ok, int fb, double spill, double floor) {

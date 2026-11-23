@@ -67,6 +67,26 @@ class WholePlateFixtureTest {
         assertEquals(-1000.0, grid.height(grid.idx(i - 1, j)));
     }
 
+    @Test void priorityFloodKeepsFlatInteriorDrainingAndMatchesBothQueues() {
+        var key = new PlateKey(-2, -1);
+        var domain = new PlateDomain(new PlateLattice(SEED, SCALE, 0), key);
+        TerrainSampler terrain = (x, z) -> 70;
+        var grid = new LowResGrid(domain, terrain, CONFIG);
+        var cells = new java.util.ArrayList<Integer>();
+        for (int i = 0; i < grid.size(); i++) if (grid.inDomain(i)) cells.add(i);
+        int[] dx = {1, 1, 0, -1, -1, -1, 0, 1};
+        int[] dz = {0, 1, 1, 1, 0, -1, -1, -1};
+        int center = grid.idx(grid.nx / 2, grid.nz / 2);
+        assertTrue(grid.inDomain(center));
+        var filled = PlatePriorityFlood.fill(key, grid, terrain, cells, CONFIG.seaLevel(), dx, dz, true);
+        var reference = PlatePriorityFlood.fill(key, grid, terrain, cells, CONFIG.seaLevel(), dx, dz, false);
+        assertArrayEquals(reference, filled, "两种队列的填洼高度必须完全一致");
+        assertTrue(filled[center] > 70.0, "无天然坡面仍要能从内陆流向边界");
+        var flow = PlatePriorityFlood.downstream(grid, cells, filled, CONFIG.seaLevel(), dx, dz);
+        assertTrue(flow[center] >= 0);
+        assertTrue(filled[flow[center]] < filled[center]);
+    }
+
     private static RiverNetwork trace(PlateKey key, boolean bowl) {
         var domain = new PlateDomain(new PlateLattice(SEED, SCALE, 0), key);
         var terrain = new TerrainSampler() {
