@@ -86,6 +86,11 @@ java {
 
 test {
     useJUnitPlatform()
+    // 密集查询对照只在手动测量时运行，避免把机器耗时当成 CI 判据。
+    if (providers.gradleProperty('riverQueryBenchmark').isPresent()) {
+        systemProperty 'streamsreflowing.riverQueryBenchmark', 'true'
+        testLogging.showStandardStreams = true
+    }
     // 测试入口失效不能被零测试成功掩盖；新增守卫必须真正被发现。
     failOnNoDiscoveredTests = true
 }

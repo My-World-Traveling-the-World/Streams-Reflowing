@@ -39,6 +39,7 @@ class NearestRiverIndexEquivalenceTest {
         }
         assertEquals(2880, samples);
         assertTrue(hits > 500, "非空命中不足不能证明产物被保留");
+        if (Boolean.getBoolean("streamsreflowing.riverQueryBenchmark")) RiverQueryBenchmark.run();
     }
 
     @Test void tieAndChannelPriorityKeepOriginalSegmentIdentityAndEverySampleField() {
