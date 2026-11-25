@@ -55,6 +55,7 @@ implements ModInitializer {
         StreamsReflowing.init();
         // 提供方先安装稳定契约，消费者无需猜测引擎内部方法或初始化次序。
         dev.streamsreflowing.api.RiverPlanApi.register(new dev.streamsreflowing.compat.StreamsPlanProvider());
+        dev.streamsreflowing.compat.RiverPreviewProvider.register();
         // RoadWeaver 标准 API：注册 StreamsThreadControl 通道 + 初始生成生命周期回调。
         // 替代原先两个方向各一套的硬编码（本 mod 的 @Pseudo @Mixin 与道路的反射）。
         dev.streamsreflowing.compat.streamscontrol.PlainCraftRoadWeaverBridge.register();

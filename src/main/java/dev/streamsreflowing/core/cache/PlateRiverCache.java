@@ -151,6 +151,12 @@ public final class PlateRiverCache implements AutoCloseable {
         return entry != null && entry.claimed;
     }
 
+    /** 远景只读已发布引用；未命中绝不认领、等待或访问磁盘。 */
+    public RiverNetwork peek(PlateKey key) {
+        Entry entry=entries.get(key);
+        return closed||entry==null?null:entry.ready;
+    }
+
     public boolean isReady(PlateKey key) {
         Entry entry = entries.get(key);
         return entry != null && entry.ready != null;

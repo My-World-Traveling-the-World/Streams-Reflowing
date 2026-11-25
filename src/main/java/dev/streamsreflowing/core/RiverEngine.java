@@ -884,6 +884,20 @@ public final class RiverEngine {
         return this.i.platesWithin(d, d2, d3 + this.n);
     }
 
+    /** 预览几何只用已发布河网；不是岸材、流体方块及装饰的最终施工证明。 */
+    public RiverPreview peekPreview(int chunkX,int chunkZ) {
+        if(!this.Y)return new RiverPreview(java.util.List.of(),java.util.List.of(),this.n,this.f.seaLevel(),this.f.streamDepth(),0);
+        double x=chunkX*16.0+8,z=chunkZ*16.0+8;
+        var rivers=new java.util.ArrayList<RiverNetwork>();var lakes=new java.util.ArrayList<RiverNetwork>();
+        for(var key:this.i.platesWithin(x,z,this.n+12)) {
+            var network=plates.peek(key);if(network==null)return null;rivers.add(network);
+        }
+        for(var key:this.i.platesWithin(x,z,this.f.gridSpacing()+12)) {
+            var network=plates.peekBase(key);if(network==null)return null;lakes.add(network);
+        }
+        return new RiverPreview(rivers,lakes,this.n,this.f.seaLevel(),this.f.streamDepth(),this.f.ditchInset());
+    }
+
     public boolean inCorridor(int n, int n2) {
         long l = (long)n << 32 ^ (long)n2 & 0xFFFFFFFFL;
         long[] lArray = this.o.get();

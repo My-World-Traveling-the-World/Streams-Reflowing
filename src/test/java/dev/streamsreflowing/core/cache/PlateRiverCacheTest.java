@@ -16,6 +16,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class PlateRiverCacheTest {
+    @Test void previewDoesNotCreateOrWaitAndCannotSurviveClose() {
+        var cache=new PlateRiverCache(()->4);
+        assertNull(cache.peek(KEY));assertEquals(0,cache.size());
+        var queue=new ArrayDeque<Runnable>();cache.request(KEY,queue::add,()->NETWORK);
+        assertNull(cache.peek(KEY));assertEquals(1,queue.size());
+        queue.remove().run();assertSame(NETWORK,cache.peek(KEY));
+        cache.close();assertNull(cache.peek(KEY));
+    }
     private static final PlateKey KEY = new PlateKey(-4, 7);
     private static final PlateKey OTHER = new PlateKey(1, -3);
     private static final RiverNetwork NETWORK = new RiverNetwork(KEY, List.of(), null, List.of());

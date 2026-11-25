@@ -83,6 +83,9 @@ final class RiverPlateNetworks implements AutoCloseable {
     }
 
     boolean contains(PlateKey key) { return activeCache().contains(key); }
+    /** 复制不可变河网引用后再采样，避免检查就绪后被LRU淘汰导致隐式重建。 */
+    RiverNetwork peek(PlateKey key) { return closed?null:activeCache().peek(key); }
+    RiverNetwork peekBase(PlateKey key) { return closed?null:base.peek(key); }
     boolean isReady(PlateKey key) { return activeCache().isReady(key); }
     int cachedBaseCount() { return base.size(); }
     boolean isClosed() { return closed; }
