@@ -1,5 +1,14 @@
 # 河流开发指南与交接
 
+## 2026-11-25 · 后续查询优化只读复核
+
+1. **改动**：本轮未改河流生产代码，仍为fix16。核对NearestRiverIndex的nearestCoveringForeign/inAnyChannel：同一局部河段编号确实写入多个空间桶，存在重复投影；inAnyChannel已有首命中立即返回，不能为去重先收集全量候选。
+2. **验证**：只读打开索引桶构造、两个查询、RiverCandidateCollector及RiverQueryBenchmark。现有基准仅测lowerNeighborGrade，不能证明这两个方法收益；上一版103项回归与部署结果保持原记录，本轮未冒称重跑。
+3. **未验证**：实际密集河网查询分布、这两个方法的P50/P90及首命中场景回退幅度均未测。整合包画面和尾延迟仍未验收，不给性能倍率。
+4. **负控**：本轮只读，无新生产变异；后续应以真实get计数证明inAnyChannel长段跨桶miss只投影唯一项、首项hit只做一次。该get计数不适用于nearestCoveringForeign的数组投影，不能混用。
+5. **下一步**：在原桶循环边扫边用现有epoch位集判首次访问，不存候选数组、不排序，保留桶序、等距取小id和首命中。每个索引查询必须begin，补连续调用/跨索引/epoch回卷。先用冻结实现对拍完整RiverSample/boolean，再分别基准长段miss、密集hit、首项hit、单桶、foreign整链排除和索引外空查询；有明显回退就不提交。
+6. **历史与回退**：基线ad943ca；仅交接文档，行为等价，不升级版本、不重新部署相同JAR。长城本轮先验证新预检实际耗时，避免并行基准争用CPU后得出错误性能结论。
+
 ## 2026-11-25 · 2.12.8-fix16 · 冻结远景匹配真实河道
 
 **本批最终交付**：`2.12.8-fix16` 已部署WAYFARING，代码提交 `d4c51503`；恢复所有负控后的最终回归103项、零跳过/失败/错误，正式构建成功。部署件与构建件SHA256一致：`60483e6d58b13bd5a736da1a98e7fbf502c475f98dc76c7e3e4eea25eb098032`。旧包备份 `D:\minecraft\Plain Craft Launcher 2\.minecraft\backups\wayfaring-optimization-20261125-204514`，四包完整清单在SeedGen补丁的build/optimization-deployment-manifest.json。未启动完整整合包验收画面或帧率，未改玩家存档。
