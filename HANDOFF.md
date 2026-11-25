@@ -3,11 +3,11 @@
 ## 2026-11-25 · 河网几何远景（2.12.8-fix15）
 
 1. **改动**：注册rivers，从当前世界已就绪的邻板河网冻结引用读取河床、水面及清空区间。peek不认领任务、不等待future、不读盘；任一所需邻板未知则返回UNAVAILABLE。输出GEOMETRY，真实岸材、流体与装饰由实际区块覆盖。
-2. **验证**：全量test、remapJar、planContractJar通过；新增河床/水面几何和未命中不建板两项。日志build/preview-final.log，精确总数收尾按XML汇总。
+2. **验证**：XML汇总101项JUnit，skipped/failures/errors均0；remapJar、planContractJar通过，新增河床/水面几何和未命中不建板两项。日志build/preview-final.log。
 3. **未验证**：未测完整整合包的密集河网尾延迟、帧率及远景画面；几何不等于原河岸真实方块。未扩大全局预热范围，也不为远景启动额外建板。
 4. **负控**：河床从水面减深度改为加深度，RiverPreviewTest红；git checkout精确恢复后全量与构建通过。日志build/preview-mutation-inverted-bed.log。
 5. **下一步**：固定种子核对河床/水面预览和真实替换，再记录实际密集河区查询耗时；不以合成基准代替游戏实测。
-6. **历史与回退**：基线a30bc1d，行为新增，前置API最低1.2.0。不改河网缓存格式；部署及推送结果另记。
+6. **历史与回退**：基线a30bc1d，行为新增，API最低1.2.0，不改缓存格式。906cd5d已推送GitHub main；fix15已部署WAYFARING，SHA256为604b29905898ddfeaaed81d1a036ee0152a92d3d6f884ef6ffe4546872f445de。旧包及配置备份在相邻plaincraft-voxyseedgen-l10n/build/deployment-backups/preview-1.2.0-20261125-162224，未改玩家存档。
 
 [项目介绍](README.md) · [版本更新](CHANGELOG.md)
 
