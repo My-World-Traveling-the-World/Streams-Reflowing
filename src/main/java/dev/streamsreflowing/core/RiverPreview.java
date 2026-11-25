@@ -12,10 +12,11 @@ public record RiverPreview(List<RiverNetwork> rivers,List<RiverNetwork> lakes,do
     public Column column(int x,int z) {
         RiverSample best=null;
         for(var network:rivers) {
-            var sample=network.sample(x+.5,z+.5,radius);
+            // 最近的窄河可能不覆盖本列；与施工相同，先选真正覆盖的河道。
+            var sample=network.sampleTiered(x+.5,z+.5,radius);
             if(sample!=null&&sample.distance()<=sample.width()&&(best==null||sample.distance()<best.distance()))best=sample;
         }
-        int localInset=best==null?0:(int)Math.round(inset*(.5+.5*Math.min(1,best.width()/3)));
+        int localInset=best==null?0:RiverWaterGeometry.inset(best.width(),x+.5,z+.5,best.dirX(),best.dirZ(),best.gradeY(),inset,this::lakeAt);
         int water=best==null?Integer.MIN_VALUE:Math.max(seaLevel-1,(int)Math.floor(best.gradeY())-localInset);
         int bed=best==null?Integer.MIN_VALUE:water-Math.max(1,(int)Math.round(2*best.width()*depth));
         for(var network:lakes) {
@@ -25,5 +26,10 @@ public record RiverPreview(List<RiverNetwork> rivers,List<RiverNetwork> lakes,do
             }
         }
         return new Column(water!=Integer.MIN_VALUE,bed,water);
+    }
+    private Lake lakeAt(int x,int z) {
+        Lake lowest=null;
+        for(var network:lakes){var lake=network.lakeAt(x,z);if(lake!=null&&(lowest==null||lake.level()<lowest.level()))lowest=lake;}
+        return lowest;
     }
 }

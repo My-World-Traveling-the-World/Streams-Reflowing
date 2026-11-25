@@ -738,24 +738,8 @@ public final class RiverEngine {
     }
 
     private int a(double d, double d2, double d3, double d4, double d5, double d6) {
-        int n = RiverEngine.insetFor(d, this.f);
-        double d7 = Math.sqrt(d4 * d4 + d5 * d5);
-        if (n <= 0 || d7 < 1.0E-6) {
-            return n;
-        }
-        if (this.lakeAt((int)Math.floor(d2), (int)Math.floor(d3)) != null) {
-            return n;
-        }
-        double d8 = -d4 / d7;
-        double d9 = -d5 / d7;
-        for (int i = 1; i <= 6; ++i) {
-            Lake lake = this.lakeAt((int)Math.floor(d2 + d8 * (double)i), (int)Math.floor(d3 + d9 * (double)i));
-            if (lake == null) continue;
-            int n2 = (int)Math.round((double)n * ((double)i / 7.0));
-            int n3 = (int)Math.floor(d6) - lake.level();
-            return Math.max(n2, Math.min(n, n3));
-        }
-        return n;
+        // 只搬迁原规则；远景用冻结湖网调用同一个纯函数，不反向启动河网任务。
+        return RiverWaterGeometry.inset(d,d2,d3,d4,d5,d6,this.f.ditchInset(),this::lakeAt);
     }
 
     public ColumnPlan planLean(int n, int n2) {
@@ -892,7 +876,7 @@ public final class RiverEngine {
         for(var key:this.i.platesWithin(x,z,this.n+12)) {
             var network=plates.peek(key);if(network==null)return null;rivers.add(network);
         }
-        for(var key:this.i.platesWithin(x,z,this.f.gridSpacing()+12)) {
+        for(var key:this.i.platesWithin(x,z,this.f.gridSpacing()+12+RiverWaterGeometry.LAKE_LOOKBACK)) {
             var network=plates.peekBase(key);if(network==null)return null;lakes.add(network);
         }
         return new RiverPreview(rivers,lakes,this.n,this.f.seaLevel(),this.f.streamDepth(),this.f.ditchInset());
