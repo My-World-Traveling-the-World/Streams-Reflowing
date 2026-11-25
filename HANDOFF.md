@@ -2,6 +2,8 @@
 
 ## 2026-11-25 · 2.12.8-fix16 · 冻结远景匹配真实河道
 
+**本批最终交付**：`2.12.8-fix16` 已部署WAYFARING，代码提交 `d4c51503`；恢复所有负控后的最终回归103项、零跳过/失败/错误，正式构建成功。部署件与构建件SHA256一致：`60483e6d58b13bd5a736da1a98e7fbf502c475f98dc76c7e3e4eea25eb098032`。旧包备份 `D:\minecraft\Plain Craft Launcher 2\.minecraft\backups\wayfaring-optimization-20261125-204514`，四包完整清单在SeedGen补丁的build/optimization-deployment-manifest.json。未启动完整整合包验收画面或帧率，未改玩家存档。
+
 1. **改动**：远景按sampleTiered选择实际覆盖列的河道，避免近窄河挡住远宽河。抽RiverWaterGeometry复用原施工湖出口上游6格水位过渡，冻结湖邻板范围补6格，仅只读peek、不建板。未改真实河网算法与缓存格式。
 2. **验证**：恢复变异后全量103项JUnit，跳过/失败/错误均0，remapJar与planContractJar通过。新增同板宽窄河反例和真实RiverEngine.plan对拍；地形sampler、写存储端口均禁止调用。
 3. **未验证**：完整整合包河床与流体画面、实际密集河区尾延迟和帧率未验收。湖床仍为声明GEOMETRY的近似，不承诺最终河岸方块。
