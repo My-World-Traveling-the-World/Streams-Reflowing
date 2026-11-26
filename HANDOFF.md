@@ -2,6 +2,9 @@
 
 ## 2026-11-26 · 2.12.8-fix17 · 外河查询流式去重
 
+**部署完成**：2.12.8-fix17已安装WAYFARING，SHA256=`55d74cdec8a32ee6849c11176ef2cfb460bb0ba80b645abb5609fbfbf382409a`，与构建件逐字一致。部署前未检出运行的Minecraft客户端；目录内此ID仅一个启用JAR，旧件改.disabled并完整备份至`D:\minecraft\Plain Craft Launcher 2\.minecraft\backups\wayfaring-seedgen-surface-20261126-093841`。四包清单见相邻SeedGen补丁build/decorator-deployment.json。未修改玩家存档或SeedGen/VSS配置，完整整合包画面与帧率待重启验收。
+
+
 1. **改动**：nearestCoveringForeign 跨桶同一河段只投影一次；先排除原河链，单桶不启用代次位集，查询范围只扫描有效桶。保持完整RiverSample、原桶序及等距最小编号。inAnyChannel两种优化原型经基准否决，生产方法原样保留，不为密集收益牺牲早停路径。
 2. **验证**：完整107项JUnit，skipped/failures/errors均0；test/remapJar/planContractJar成功。新测试覆盖跨索引连续调用、代次回卷、编号4095、等距与整链排除及原布尔首命中；冻结实现2880混合查询逐字段对拍。build/streaming-final.log。
 3. **未验证**：整合包新档实际查询分布、帧率及生成尾延迟未测。交替21批×4096查询的合成外河P50：长段miss2004→623ns、密集15225→4441ns、整链排除199→151ns、界外26→10ns；单桶43→52ns，本轮多次微基准方向不稳定，不能宣称所有输入更快。布尔原型单桶76→511ns已撤回。完整结果build/streaming-query-benchmark-4.log，禁止套成游戏加速倍率。
