@@ -516,29 +516,33 @@ public final class NearestRiverIndex {
             return null;
         }
         int n2 = n >= 0 ? this.x[n] : Integer.MIN_VALUE;
-        int n3 = this.a(d - d3);
-        int n4 = this.a(d + d3);
-        int n5 = this.b(d2 - d3);
-        int n6 = this.b(d2 + d3);
+        int n3 = Math.max(this.ac, this.a(d - d3));
+        int n4 = Math.min(this.ac + this.ae - 1, this.a(d + d3));
+        int n5 = Math.max(this.ad, this.b(d2 - d3));
+        int n6 = Math.min(this.ad + this.af - 1, this.b(d2 + d3));
+        if (n3 > n4 || n5 > n6) return null;
+        // 单桶不可能重复编号；只为跨桶查询准备代次位集，保持原候选与等距取小编号规则。
+        RiverCandidateCollector visited = null;
+        if (n3 != n4 || n5 != n6) { visited = D.get(); visited.begin(this.f.size()); }
         double d4 = Double.MAX_VALUE;
         int n7 = -1;
         double d5 = 0.0;
         for (int i = n3; i <= n4; ++i) {
             int n16 = i - this.ac;
-            if (n16 < 0 || n16 >= this.ae) continue;
             for (int j = n5; j <= n6; ++j) {
                 int n17 = j - this.ad;
-                if (n17 < 0 || n17 >= this.af) continue;
                 int n18 = n16 + this.ae * n17;
                 double d6 = d4 < d3 ? d4 : d3;
                 for (int n19 = this.ab[n18]; n19 < this.ab[n18 + 1]; ++n19) {
                     int n8 = this.aa[n19];
+                    // 排除的整条河链不参与几何计算，也无需为它逐段标记代次。
+                    if (this.x[n8] == n2) continue;
+                    if (visited != null && !visited.firstVisit(n8)) continue;
                     double d7;
                     double d8;
                     double d9;
                     double d10 = this.j[n8];
                     double d11;
-                    if (this.x[n8] == n2) continue;
                     double d13 = d < this.l[n8] ? this.l[n8] - d : (d > this.m[n8] ? d - this.m[n8] : 0.0);
                     double d14 = d2 < this.n[n8] ? this.n[n8] - d2 : (d2 > this.o[n8] ? d2 - this.o[n8] : 0.0);
                     double d15 = d13 * d13 + d14 * d14;

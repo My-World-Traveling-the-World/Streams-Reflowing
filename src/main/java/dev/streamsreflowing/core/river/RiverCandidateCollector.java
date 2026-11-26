@@ -23,15 +23,22 @@ final class RiverCandidateCollector {
     void addRange(int[] source, int from, int to) {
         inputs += to - from;
         for (int i = from; i < to; i++) {
-            int id = source[i], word = id >>> 6;
-            if (stamps[word] != epoch) { stamps[word] = epoch; bits[word] = 0; }
-            long bit = 1L << id;
-            if ((bits[word] & bit) != 0) continue;
-            bits[word] |= bit;
+            int id = source[i];
+            if (!firstVisit(id)) continue;
             // 保留第一次出现的桶遍历次序；热缓存仍在唯一项上按原编号排序。
             if (size + 1 >= ids.length) ids = Arrays.copyOf(ids, ids.length * 2);
             ids[size++] = id;
         }
+    }
+
+    /** 外河流式查询只需要判重，不收集候选数组，避免为去重再分配和排序。 */
+    boolean firstVisit(int id) {
+        int word = id >>> 6;
+        if (stamps[word] != epoch) { stamps[word] = epoch; bits[word] = 0; }
+        long bit = 1L << id;
+        if ((bits[word] & bit) != 0) return false;
+        bits[word] |= bit;
+        return true;
     }
 
     int[] scratch() { ids[size] = -1; return ids; }

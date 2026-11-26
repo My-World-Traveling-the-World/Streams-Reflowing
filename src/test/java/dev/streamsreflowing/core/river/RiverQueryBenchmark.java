@@ -17,6 +17,7 @@ final class RiverQueryBenchmark {
 
     static void run() {
         for (int type : new int[] {0, 2}) run(type);
+        RiverStreamingBenchmark.run();
     }
 
     private static void run(int type) {
