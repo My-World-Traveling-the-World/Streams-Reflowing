@@ -1,0 +1,53 @@
+import java.util.zip.ZipFile
+
+// 转换原版发行包的签名供编译使用，绕过高版本 Loom 写入的模组元数据。
+def compiler = configurations.create('compatRemapper')
+dependencies.add(compiler.name, 'net.fabricmc:tiny-remapper:0.13.0')
+dependencies.add(compiler.name, 'net.fabricmc:mapping-io:0.8.0')
+dependencies.add(compiler.name, 'org.ow2.asm:asm-util:9.9')
+def sourceDir = providers.gradleProperty('compatInputDir').map { file(it) }
+    .orElse(layout.projectDirectory.dir('_recover/libs').asFile)
+def upstreamNames = ['DistantHorizonsApi-7.2.0.jar', 'sable-fabric-1.21.1-2.0.6.jar',
+                     'sablebeyond-fabric-1.21.1-v0.5.0.jar']
+def upstream = sourceDir.map { dir -> upstreamNames.collect { new File(dir, it) } }
+def outputDirectory = layout.buildDirectory.dir('compat-inputs')
+ext.compatCompilerInputs = outputDirectory.map { dir -> (upstreamNames + 'sable-companion-fabric-1.21.1-1.6.0.jar').collect { dir.file(it) } }
+def mappings = project.ext.compatMappings
+def game = project.ext.compatGameJars
+def execOperations = services.get(org.gradle.process.ExecOperations)
+
+tasks.register('prepareCompatInputs') {
+    inputs.files(upstream, compiler, mappings, game)
+    outputs.dir(outputDirectory)
+    doLast {
+        def sources = upstream.get()
+        def missing = sources.findAll { !it.isFile() }
+        if (missing) throw new GradleException("缺河流兼容依赖：${missing}，请通过 -PcompatInputDir 指定发行件目录")
+        File output = outputDirectory.get().asFile
+        output.mkdirs()
+        String companionName = 'sable-companion-fabric-1.21.1-1.6.0.jar'
+        File companion = new File(temporaryDir, companionName)
+        // companion 与 Sable 同步发行，直接从已声明输入提取以免混用不同版本。
+        new ZipFile(sources[1]).withCloseable { jar ->
+            def entry = jar.getEntry("META-INF/jars/${companionName}")
+            if (entry == null) throw new GradleException("Sable 发行件未包含 ${companionName}")
+            jar.getInputStream(entry).withCloseable { stream ->
+                companion.withOutputStream { stream.transferTo(it) }
+            }
+        }
+        def allSources = sources + companion
+        allSources.each { source ->
+            File result = new File(output, source.name)
+            File temporary = new File(temporaryDir, source.name + '.named.jar')
+            java.nio.file.Files.deleteIfExists(temporary.toPath())
+            execOperations.javaexec {
+                classpath = compiler
+                mainClass = 'net.fabricmc.tinyremapper.Main'
+                args source.absolutePath, temporary.absolutePath, mappings.get().absolutePath, 'intermediary', 'named'
+                args game.get().collect { it.toString() }
+                args allSources.findAll { it != source }.collect { it.absolutePath }
+            }
+            java.nio.file.Files.move(temporary.toPath(), result.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
+}

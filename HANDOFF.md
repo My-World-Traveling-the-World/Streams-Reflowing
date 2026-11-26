@@ -50,7 +50,7 @@
 
 ## 构建和验证
 
-先在同级 `plaincraft-worldgen-api` 运行 `:api:contractJar :api-fabric:devModJar`。按 `build.gradle` 将 Mojang 映射的 DH、Sable、SableBeyond 与 companion 编译件准备在 `_recover/libs/named/`。使用 JDK 21 与外置 Gradle 9.4.1。
+先在同级 `plaincraft-worldgen-api` 运行 `:api:contractJar :api-fabric:devModJar`。用 `-PcompatInputDir=<目录>` 指定原始 DH API 7.2.0、Sable 2.0.6 和 SableBeyond 0.5.0 的发行包目录。Gradle 自动提取 Sable 的 companion 并生成编译件到 `build/compat-inputs/`。使用 JDK 21 与外置 Gradle 9.4.1。
 
 ```powershell
 & $gradle test remapJar planContractJar --daemon --console=plain
