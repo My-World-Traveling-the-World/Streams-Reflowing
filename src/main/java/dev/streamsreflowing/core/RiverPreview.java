@@ -13,8 +13,8 @@ public record RiverPreview(List<RiverNetwork> rivers,List<RiverNetwork> lakes,do
         RiverSample best=null;
         for(var network:rivers) {
             // 最近的窄河可能不覆盖本列；与施工相同，先选真正覆盖的河道。
-            var sample=network.sampleTiered(x+.5,z+.5,radius);
-            if(sample!=null&&sample.distance()<=sample.width()&&(best==null||sample.distance()<best.distance()))best=sample;
+            var sample=network.sampleChannel(x+.5,z+.5,radius);
+            if(sample!=null&&(best==null||sample.distance()<best.distance()))best=sample;
         }
         int localInset=best==null?0:RiverWaterGeometry.inset(best.width(),x+.5,z+.5,best.dirX(),best.dirZ(),best.gradeY(),inset,this::lakeAt);
         int water=best==null?Integer.MIN_VALUE:Math.max(seaLevel-1,(int)Math.floor(best.gradeY())-localInset);

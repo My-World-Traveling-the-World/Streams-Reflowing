@@ -48,6 +48,10 @@ public final class RiverNetwork {
         return this.c.nearestTiered(d, d2, d3);
     }
 
+    public RiverSample sampleChannel(double x, double z, double radius) {
+        return this.c.nearestChannel(x, z, radius);
+    }
+
     public RiverSample sampleCoveringForeign(double d, double d2, double d3, int n) {
         return this.c.nearestCoveringForeign(d, d2, d3, n);
     }

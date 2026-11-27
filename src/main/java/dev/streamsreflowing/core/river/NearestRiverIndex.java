@@ -343,6 +343,15 @@ public final class NearestRiverIndex {
     }
 
     public RiverSample nearestTiered(double d, double d2, double d3) {
+        return nearestTiered(d, d2, d3, false);
+    }
+
+    /** 远景只渲染河槽，干列不需要为最近河岸构造采样对象。 */
+    public RiverSample nearestChannel(double x, double z, double radius) {
+        return nearestTiered(x, z, radius, true);
+    }
+
+    private RiverSample nearestTiered(double d, double d2, double d3, boolean channelOnly) {
         if (this.f.isEmpty()) {
             return null;
         }
@@ -387,7 +396,7 @@ public final class NearestRiverIndex {
                         n3 = n5;
                         d9 = d18;
                     }
-                    if (d23 <= d24 + Math.max(5.0, d24 * this.s) && (d23 < d6 || d23 == d6 && n5 < n2)) {
+                    if (!channelOnly && d23 <= d24 + Math.max(5.0, d24 * this.s) && (d23 < d6 || d23 == d6 && n5 < n2)) {
                         d6 = d23;
                         n2 = n5;
                         d7 = d18;
@@ -396,6 +405,7 @@ public final class NearestRiverIndex {
             }
             ++n4;
         }
+        if (channelOnly) return n3 < 0 ? null : this.a(n3, d9, d8);
         if (n3 >= 0) {
             n = n3;
             d4 = d8;

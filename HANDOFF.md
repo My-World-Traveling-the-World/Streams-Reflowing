@@ -1,5 +1,14 @@
 # 河流开发指南与交接
 
+## 2026-11-27 · 远景河槽专用查询
+
+1. 改动为河流远景增加河槽专用查询。沿用原候选和距离优先级，干列无需生成河岸或最近河段的样本对象。
+2. 验证涵盖 2880 次与冻结实现对拍的湿列和干列查询。107 项 JUnit 全过，零失败和跳过，正式包和契约包构建通过。日志 build/channel-preview-final.log。
+3. 尚无整包帧率、分配率和密集河网尾延迟测量。本轮仅完成构建。
+4. 负控将所有河槽查询置空。湿列对拍期望 RiverSample 却收到 null，守卫实测失败。恢复源码后全量通过，见 build/channel-preview-mutation.log。
+5. 跟进同种子新档真实密集河网的查询耗时和游戏尾延迟。
+6. 开工基线 23fbf71，行为等价，可单独回退。
+
 ## 2026-11-26 · 2.12.8-fix17 · 外河查询流式去重
 
 **部署完成**：2.12.8-fix17已安装WAYFARING，SHA256=`55d74cdec8a32ee6849c11176ef2cfb460bb0ba80b645abb5609fbfbf382409a`，与构建件逐字一致。部署前未检出运行的Minecraft客户端；目录内此ID仅一个启用JAR，旧件改.disabled并完整备份至`D:\minecraft\Plain Craft Launcher 2\.minecraft\backups\wayfaring-seedgen-surface-20261126-093841`。四包清单见相邻SeedGen补丁build/decorator-deployment.json。未修改玩家存档或SeedGen/VSS配置，完整整合包画面与帧率待重启验收。

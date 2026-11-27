@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class NearestRiverIndexEquivalenceTest {
     @Test void allQueriesMatchFrozenOnLongOverlappingAndDegenerateSegments() {
         var random = new Random(8116103);
-        int samples = 0, hits = 0;
+        int samples = 0, hits = 0, wet = 0, dryWithFallback = 0;
         for (int fixture = 0; fixture < 4; fixture++) {
             var segments = fixture(fixture, random);
             var actual = new NearestRiverIndex(segments, 24, 16, 1.4);
@@ -26,6 +26,11 @@ class NearestRiverIndexEquivalenceTest {
                     var tiered = actual.nearestTiered(x, z, radius);
                     assertEquals(old.nearestTiered(x, z, radius), tiered);
                     if (tiered != null) hits++;
+                    // 河岸/最近段只是旧查询的替代值，预览必须保留河槽并舍掉这些干列。
+                    boolean covering = tiered != null && tiered.distance() <= tiered.width();
+                    assertEquals(covering ? tiered : null, actual.nearestChannel(x, z, radius));
+                    if (covering) wet++;
+                    else if (tiered != null) dryWithFallback++;
                     assertEquals(old.nearestCoveringForeign(x, z, radius, exclude),
                             actual.nearestCoveringForeign(x, z, radius, exclude));
                     assertEquals(old.lowerNeighborGrade(x, z, radius, exclude, 96, 2),
@@ -38,6 +43,7 @@ class NearestRiverIndexEquivalenceTest {
             }
         }
         assertEquals(2880, samples);
+        assertTrue(wet > 0 && dryWithFallback > 0, "应同时覆盖湿列与旧查询有干列结果");
         assertTrue(hits > 500, "非空命中不足不能证明产物被保留");
         if (Boolean.getBoolean("streamsreflowing.riverQueryBenchmark")) RiverQueryBenchmark.run();
     }
