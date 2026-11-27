@@ -14,6 +14,9 @@ class WorldBoundRiverSessionTest {
         int calls;
         Runnable duringRead = () -> {};
         public Object identity() { return this; }
+        @Override public RiverPlanApi.MacroWaterScope macroWaterScope() {
+            return new RiverPlanApi.MacroWaterScope(2048, "水系配置");
+        }
         public RiverPlanApi.Column column(int x, int z) {
             calls++; duringRead.run(); return new RiverPlanApi.Column(true, true, 70, 65, 2, 5);
         }
@@ -29,6 +32,7 @@ class WorldBoundRiverSessionTest {
         var delegate = new Delegate();
         var session = new WorldBoundRiverSession(delegate, () -> true);
         assertSame(delegate, session.identity());
+        assertEquals(new RiverPlanApi.MacroWaterScope(2048, "水系配置"), session.macroWaterScope());
         assertEquals(new RiverPlanApi.Column(true, true, 70, 65, 2, 5), session.column(1, 2));
         assertEquals(new RiverPlanApi.Lake(true, 71, 70), session.lake(1, 2));
         var snapshot = session.platesNear(1, 2, 64);
@@ -44,6 +48,7 @@ class WorldBoundRiverSessionTest {
         assertThrows(IllegalStateException.class, () -> session.lake(1, 2));
         assertThrows(IllegalStateException.class, () -> session.platesNear(1, 2, 64));
         assertThrows(IllegalStateException.class, () -> session.prewarm(new RiverPlanApi.Plate(1, 2)));
+        assertThrows(IllegalStateException.class, session::macroWaterScope);
         assertEquals(0, delegate.calls);
         assertEquals(RiverPlanApi.Phase.STOPPED, session.startup().phase());
         assertEquals(7, session.startup().session());

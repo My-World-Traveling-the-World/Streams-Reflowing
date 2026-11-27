@@ -18,6 +18,14 @@ public final class RiverPlanApi {
     public record Startup(long session, Phase phase, String reason) {
         public Startup { Objects.requireNonNull(phase); Objects.requireNonNull(reason); }
     }
+    /** radiusBlocks 是提供方完成的预热半径；身份只含影响湿列的参数，不含缓存冷热或会话号。 */
+    public record MacroWaterScope(int radiusBlocks, String waterRules) {
+        public static final MacroWaterScope NONE = new MacroWaterScope(0, "");
+        public MacroWaterScope {
+            if (radiusBlocks < 0) throw new IllegalArgumentException("河网粗查半径不能为负");
+            Objects.requireNonNull(waterRules);
+        }
+    }
     public record Open(Availability availability, Session session, String reason) {
         public Open {
             Objects.requireNonNull(availability); Objects.requireNonNull(reason);
@@ -34,6 +42,8 @@ public final class RiverPlanApi {
         List<Plate> platesNear(double x, double z, double radius) throws Exception;
         void prewarm(Plate plate) throws Exception;
         Startup startup();
+        /** 老提供方未声明可信采样范围，消费者不能替它假定全域河网已经准备好。 */
+        default MacroWaterScope macroWaterScope() { return MacroWaterScope.NONE; }
     }
     public interface Provider {
         Session open(Object world);

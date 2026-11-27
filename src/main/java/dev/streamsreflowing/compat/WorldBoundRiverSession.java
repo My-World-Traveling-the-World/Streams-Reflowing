@@ -16,6 +16,9 @@ final class WorldBoundRiverSession implements RiverPlanApi.Session {
         if (!alive.getAsBoolean()) throw new IllegalStateException("河流计划会话所属世界已卸载或引擎已替换");
     }
     @Override public Object identity() { return delegate.identity(); }
+    @Override public RiverPlanApi.MacroWaterScope macroWaterScope() {
+        check(); var result = delegate.macroWaterScope(); check(); return result;
+    }
     @Override public RiverPlanApi.Column column(int x, int z) throws Exception {
         check(); var result = delegate.column(x, z); check(); return result;
     }

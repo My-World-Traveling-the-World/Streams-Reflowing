@@ -27,6 +27,14 @@ public final class StreamsPlanProvider implements RiverPlanApi.Provider {
 
     private record EngineSession(RiverEngine engine, ServerLevel level) implements RiverPlanApi.Session {
         @Override public Object identity() { return engine; }
+        @Override public RiverPlanApi.MacroWaterScope macroWaterScope() {
+            int radius = StreamsPrewarmService.completedRadiusBlocks(level);
+            if (radius == 0) return RiverPlanApi.MacroWaterScope.NONE;
+            // 使用当前引擎自己的配置，并纳入正片河道的高度门；缓存容量、线程数不改变地理结果。
+            String rules = engine.config() + ":streams=" + dev.streamsreflowing.platform.Services.PLATFORM.generateStreams()
+                    + ":maxY=" + dev.streamsreflowing.compat.streamscontrol.StreamsPrewarmConfig.current().maxRiverPlanY();
+            return new RiverPlanApi.MacroWaterScope(radius, rules);
+        }
         @Override public RiverPlanApi.Column column(int x, int z) {
             var plan = engine.plan(x, z);
             return new RiverPlanApi.Column(plan.inChannel(), plan.inCorridor(), plan.waterSurfaceY(),

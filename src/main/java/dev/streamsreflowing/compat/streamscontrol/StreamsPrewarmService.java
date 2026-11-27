@@ -118,6 +118,8 @@ public final class StreamsPrewarmService {
                 state.startup.disabled();
                 return;
             }
+            // 对外只交付本轮真实请求的半径，不能把加载后修改的 UI 数值冒充已预热范围。
+            state.macroRadiusBlocks = config.startupRadiusChunks() * 16;
             state.startupWork.enter();
             EngineContext context = context(level);
             if (context == null) {
@@ -205,6 +207,12 @@ public final class StreamsPrewarmService {
                 ? new dev.streamsreflowing.api.RiverPlanApi.Startup(0,
                         dev.streamsreflowing.api.RiverPlanApi.Phase.NOT_STARTED, "本世界尚无启动会话")
                 : state.startup.snapshot();
+    }
+
+    public static int completedRadiusBlocks(ServerLevel level) {
+        var state = STATES.get(level);
+        return state != null && state.startup.snapshot().phase() == dev.streamsreflowing.api.RiverPlanApi.Phase.COMPLETE
+                ? state.macroRadiusBlocks : 0;
     }
 
     /** 结果门属于河流发布方；保留旧 awaitStartup 签名以兼容已有调用者。 */
@@ -646,6 +654,7 @@ public final class StreamsPrewarmService {
         private final RiverStartupSession startupWork = new RiverStartupSession(
                 StreamsSamplerModeController::enterInitialGeneration,
                 StreamsSamplerModeController::exitInitialGeneration);
+        private volatile int macroRadiusBlocks;
         private volatile boolean closed;
     }
 

@@ -22,6 +22,7 @@ class RiverPlanApiTest {
         assertThrows(IllegalArgumentException.class,
                 () -> new RiverPlanApi.Open(RiverPlanApi.Availability.AVAILABLE, null, ""));
         assertThrows(NullPointerException.class, () -> new RiverPlanApi.Startup(1, null, ""));
+        assertThrows(IllegalArgumentException.class, () -> new RiverPlanApi.MacroWaterScope(-1, "错误"));
     }
 
     @Test void realRegistryPreservesSessionDataAndExplainsProviderFailure() throws Exception {
@@ -65,6 +66,8 @@ class RiverPlanApiTest {
         assertEquals(List.of(new RiverPlanApi.Plate(-3, 7)), plates);
         assertThrows(UnsupportedOperationException.class, () -> plates.clear());
         opened.session().prewarm(plates.getFirst());
+        // 未声明预热覆盖域的旧会话仍能被其他消费者使用，但不参与宏观水网评分。
+        assertEquals(RiverPlanApi.MacroWaterScope.NONE, opened.session().macroWaterScope());
         assertEquals(new RiverPlanApi.Startup(7, RiverPlanApi.Phase.BUILDING, ""), RiverPlanApi.startup(world));
         assertEquals(RiverPlanApi.Availability.FAILED, RiverPlanApi.open(null).availability());
         assertTrue(RiverPlanApi.open(null).reason().contains("不是当前世界"));

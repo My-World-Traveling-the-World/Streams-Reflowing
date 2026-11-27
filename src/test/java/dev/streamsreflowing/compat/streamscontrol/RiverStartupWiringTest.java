@@ -32,7 +32,9 @@ class RiverStartupWiringTest {
         assertTrue(source.contains("state.startup.stop();"));
         // 结果门与进度租约是两个契约；只保护ready仍会留下旧任务污染新进度。
         assertTrue(source.contains("state.startupWork.close();"));
-        assertTrue(source.contains("state.startup.stop();\n            state.startupWork.close();"));
+        // 校验相邻调用的顺序，Windows 检出使用 CRLF 不该改变结果。
+        assertTrue(java.util.regex.Pattern.compile("state\\.startup\\.stop\\(\\);\\s+state\\.startupWork\\.close\\(\\);")
+                .matcher(source).find());
         assertTrue(source.contains("state.startupWork.submit("));
         assertTrue(source.contains("session.submit(executor, () -> {"));
         assertFalse(source.contains("StreamsStartupProgress.setCompleted("));
